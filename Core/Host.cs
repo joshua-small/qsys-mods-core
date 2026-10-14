@@ -31,13 +31,15 @@ public static class Host
     public static void Call(object value, string name) => (value.GetType().GetMethod(name, Instance, null, System.Type.EmptyTypes, null) ?? throw new MissingMethodException(value.GetType().FullName, name)).Invoke(value, null);
     public static string Receipt(string mod, string kind, object detail)
     {
-        try
-        {
-            SettingsStore.ValidateId(mod); var dir = Path.Combine(SettingsDirectory, "diagnostics", mod); Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffff") + ".json");
-            File.WriteAllText(path, JsonSerializer.Serialize(new { kind, detail }, new JsonSerializerOptions { WriteIndented = true })); return path;
-        }
+        try { return RequiredReceipt(mod, kind, detail); }
         catch { return ""; }
+    }
+    // Editing operations call this before their first mutation and must fail if evidence cannot be saved.
+    public static string RequiredReceipt(string mod, string kind, object detail)
+    {
+        SettingsStore.ValidateId(mod); var dir = Path.Combine(SettingsDirectory, "diagnostics", mod); Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffffff") + ".json");
+        File.WriteAllText(path, JsonSerializer.Serialize(new { kind, detail }, new JsonSerializerOptions { WriteIndented = true })); return path;
     }
     public static void Error(string mod, Exception error, bool notify = false)
     {
