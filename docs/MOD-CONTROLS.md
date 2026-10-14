@@ -2,6 +2,44 @@
 
 Core owns the binding engine, approved native-action replacements, and the `mods-core-controls` section of `preferences.json`. Better Shortcuts is an optional view/editor of that state. Feature mods must not attach competing replacement handlers or implement a second binding store.
 
+## Registration and default conflicts
+
+Feature mods declare stable commands and default shortcuts with Core. Better
+Shortcuts edits and explains shared state; it is not required for dispatch,
+default assignment, conflict resolution or persistence. Core resolves defaults
+even when Better Shortcuts is absent.
+
+At inspected baseline `beafd57` (0.1.4), `Commands.Register` rejected duplicate
+IDs but did not check key collisions. Later, `ControlBindings.Validate` rejected
+conflicting effective keys before application. This prevented an ambiguous apply
+but could abort the whole binding refresh. Successful registration did not mean
+a default was conflict-free.
+
+This source candidate changes default resolution:
+
+- Existing native keys and explicit saved assignments take precedence.
+- A colliding mod default stays unassigned. Two competing mod defaults both
+  stay unassigned; load order does not choose a winner.
+- Known direct native/editor input bindings and top-level menu access keys also
+  prevent default takeover. Undiscovered scopes, OS-reserved keys and embedded
+  editor internals remain validation boundaries.
+- `ModControls.Bindings.DefaultConflicts(overrides)` exposes command, key and
+  competing owners. Better Shortcuts or another inspector can consume it; this
+  Core change does not modify Better Shortcuts' UI.
+- Conflicting explicit assignments still fail validation. Intentional overwrite
+  and reset use Core's existing prepare/review/apply plan, preserving unrelated
+  alternatives. The live JSON interface rejects unresolved explicit conflicts.
+
+`ModCommand.DefaultGesture` declares an ordinary default. Leave it null and use
+`ModControls.RegisterShortcut` for a reviewed proposal. Native replacements retain
+the native action identity/current keys; do not create a duplicate action with
+the same keys. Additional native-default/chord APIs in #4 must preserve these
+ownership and precedence rules when integrated.
+
+The candidate adds ten WPF checks for default collisions, precedence, reporting,
+reviewed reset and menu access keys, bringing the controls suite to 134 checks.
+The historical application evidence below does not validate this new behavior.
+
 ## User flow
 
 Better Packing's four native replacements are one group, enabled by default. **Preferences > Better Packing > Disable default Q-SYS control overrides** turns the entire group off. There is no per-action checklist or first-run approval for Packing. The feature owns this setting's UI; Core owns persistence and routing. Existing keys stay assigned, and UCI packing stays native.
@@ -59,7 +97,7 @@ Deploy Core and Better Shortcuts **0.1.4 together**, with Better Packing **0.1.3
 
 ## Validation
 
-`tests/Controls` links production registry, planner, binding engine, router, review and storage code with a minimal fake host. Its 124 checks run under Windows WPF without displaying windows or starting Designer. They cover menu hints/formatting/remapping, alias migration, explicit transfer, review confirmation, swaps, competing/disjoint providers, failed/absent providers, original-key retention, editor takeover restoration, persistence, stale saves and exactly-once routing. Existing settings-store checks remain separate. This is offline evidence, not Designer acceptance.
+`tests/Controls` links production registry, planner, binding engine, router, review and storage code with a minimal fake host. Its 134 checks run under Windows WPF without displaying windows or starting Designer. They cover default-conflict precedence/reporting, menu hints/formatting/remapping, alias migration, explicit transfer, review confirmation, swaps, competing/disjoint providers, failed/absent providers, original-key retention, editor takeover restoration, persistence, stale saves and exactly-once routing. Existing settings-store checks remain separate. This is offline evidence, not Designer acceptance.
 
 Scoped Designer 10.5 checks on 2026-10-14 with matching 0.1.3 builds confirmed one unchecked Packing opt-out, no empty Mod Controls page, one assigned native row per Pack direction, source/key updates across pages, Clear/Reset/OK/reopen and Cancel preserving the preferences file. On a disposable two-component schematic, Ctrl+Shift+L/R/T/B each executed Better Packing exactly once with Gap 20 and exact final-position receipts. Ctrl+Shift+L used Q-SYS when the opt-out was enabled. All operation and insertion changes were undone; defaults were restored.
 

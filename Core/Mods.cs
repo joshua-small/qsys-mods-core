@@ -55,6 +55,7 @@ public static class Mods
             foreach (var pair in pending.ToArray()) Run(pair.Key, pair.Value, main);
             pending.Clear();
             ModControls.CompleteInitialization();
+            SharedSettings.Initialize(main);
             // The host creates a menu item for every loader adapter. Replace those with registered operations.
             foreach (var item in Menus((ItemsControl)main.FindName("mainMenu")).Where(m => m.DataContext is ModModule).ToArray())
                 item.Visibility = Visibility.Collapsed;
