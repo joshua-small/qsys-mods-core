@@ -127,6 +127,35 @@ internal static partial class Program
         var menu = (Menu)window.FindName("mainMenu"); menu.Items.Add(new MenuItem { Header = "_File" });
         var access = Commands.Register(new("collision/menu", "Menu collision", "Fixture", () => { }, () => true, new(Key.F, ModifierKeys.Alt)));
         Check(engine.DefaultConflicts(new()).Any(c => c.CommandId == access.Definition.Id && c.Owners.Any(n => n.Contains("menu access"))), "Native menu access keys participate in default conflict detection");
+        Reject(() => engine.Validate(new(new() { [access.Definition.Id] = "Alt+F" })), "Direct assignments cannot bypass menu overwrite consent");
+        Reject(() => engine.Validate(new(new() { [access.Definition.Id] = "Alt+F > P" })), "Chord prefixes also require menu overwrite consent");
+        var menuReset = engine.Prepare(access.Definition.Id, null, new());
+        Check(menuReset.Overrides.GetValueOrDefault(access.Definition.Id) == "Alt+F" && menuReset.EditorOverrides[access.Definition.Id] == "Alt+F", "Reviewed menu reset records an explicit assignment and consent");
+        engine.Apply(new(menuReset.Overrides, menuReset.EditorOverrides));
+        Check(engine.Display(access.Definition.Id, menuReset.Overrides) == "Alt+F", "Confirmed menu reset activates the requested default");
+        engine.Apply(empty);
+        var directInput = new KeyBinding(new RoutedCommand("Isolated editor", typeof(Program)), new KeyGesture(Key.F23, ModifierKeys.Control | ModifierKeys.Alt));
+        window.InputBindings.Add(directInput);
+        var direct = Commands.Register(new("collision/editor-default", "Editor default", "Fixture", () => { }, () => true, new(Key.F23, ModifierKeys.Control | ModifierKeys.Alt)));
+        Reject(() => engine.Validate(new(new() { [direct.Definition.Id] = "Ctrl+Alt+F23" })), "Direct assignments cannot bypass editor overwrite consent");
+        Reject(() => engine.Validate(new(new() { [direct.Definition.Id] = "Ctrl+Alt+F23 > P" })), "Chord prefixes also require editor overwrite consent");
+        var editorReset = engine.Prepare(direct.Definition.Id, null, new());
+        Check(editorReset.Overrides.GetValueOrDefault(direct.Definition.Id) == "Ctrl+Alt+F23" && editorReset.EditorOverrides[direct.Definition.Id] == "Ctrl+Alt+F23", "Reviewed editor reset records an explicit assignment and consent");
+        engine.Apply(new(editorReset.Overrides, editorReset.EditorOverrides));
+        Check(!window.InputBindings.Contains(directInput) && engine.Display(direct.Definition.Id, editorReset.Overrides) == "Ctrl+Alt+F23", "Confirmed editor reset activates its default and suppresses the prior binding");
+        engine.Apply(empty);
+        Check(window.InputBindings.Contains(directInput), "Removing an approved default takeover restores the editor binding");
+        window.InputBindings.Remove(directInput);
+        var directNative = new RoutedUICommand("Direct native", "DirectNative", typeof(Program));
+        window.CommandBindings.Add(new(directNative, (_, _) => { }, (_, e) => e.CanExecute = true));
+        var nativeInput = new KeyBinding(directNative, new KeyGesture(Key.F23, ModifierKeys.Control | ModifierKeys.Alt)); window.InputBindings.Add(nativeInput);
+        Commands.DiscoverNative(window);
+        Reject(() => engine.Validate(new(new() { [direct.Definition.Id] = "Ctrl+Alt+F23" })), "Native direct bindings absent from InputGestures still require consent");
+        var nativeReset = engine.Prepare(direct.Definition.Id, null, new());
+        engine.Apply(new(nativeReset.Overrides, nativeReset.EditorOverrides));
+        Check(nativeReset.Conflicts.Any(n => n.Contains("Direct native")) && !window.InputBindings.Contains(nativeInput), "Reviewed transfer handles registered native direct bindings");
+        engine.Apply(empty); Check(window.InputBindings.Contains(nativeInput), "Removing a native direct-binding takeover restores its original input");
+        window.InputBindings.Remove(nativeInput);
         engine.Apply(empty);
     }
     static void MenuHintTests(Window window)

@@ -19,6 +19,12 @@ versions and files over 2 MiB are rejected. All providers validate before any
 provider applies. Shared shortcuts use Core's validator; file edits do not
 silently transfer another action's assigned key.
 
+Taking a discovered native/editor InputBinding or top-level menu access key
+requires the same sequence in that command's `Bindings.EditorOverrides` entry.
+This includes a chord whose first stroke claims that key. Better Shortcuts and
+Core's review planner supply this consent after a reviewed overwrite; a direct
+JSON edit must declare it explicitly too.
+
 ```json
 {
   "$schema": "./settings.schema.json",
@@ -103,6 +109,9 @@ native values, bindings and its own successful mod-store write. A failed stale
 write is never rolled back over a different process's newer preferences. If
 recovery fails, sync stops and reports the problem. Review the recovery file and
 restart Designer; the invalid candidate remains available for correction.
+A stopped service will not recreate a deleted settings file from unverified
+live values or replace the last-good snapshot. An existing file can still open
+for inspection while the recovery error remains visible.
 
 ## Mod integration
 
@@ -129,11 +138,11 @@ The branch incorporates chord commit `3ac0ea4`: legacy gestures, declared native
 defaults and chords use the same conflict policy, including prefix collisions.
 Explicit unresolved conflicts in JSON reject the entire edit before side effects.
 
-31 checks in disposable Designer 10.5 on 2026-10-14 use the guarded fixtures in
+34 checks in disposable Designer 10.5 on 2026-10-14 use the guarded fixtures in
 [`tests/LiveSettings`](../tests/LiveSettings/README.md). It covers native/mod JSON
 application, Preferences pause/resume and reverse projection, malformed and invalid
 edits, duplicate and prefix conflicts, default suppression, user precedence,
-reviewed overwrite and chord remapping. The actual Better Shortcuts page verifies
+reviewed overwrite, native-menu takeover consent/reset and chord remapping. The actual Better Shortcuts page verifies
 conflict ownership, Cancel, staged overwrite, recorder candidates, OK and menu/JSON
 updates. Those recorder checks call its methods in the real Designer process;
 they are distinct from physical keyboard checks.
@@ -146,6 +155,13 @@ restores prior live values, and preserves last-good recovery. Clearing a Hard Li
 name survives native reload. An unchanged startup file also repairs a missing
 recovery snapshot.
 
+PR review added regressions for direct JSON bypass of native/editor overwrite
+consent, a reviewed Reset that left its default inactive, and recreating a missing
+file after recovery failure. Core now validates takeover consent at the shared
+save boundary, makes reviewed takeovers explicit, and preserves the fault state
+and last-good snapshot. Native direct InputBindings are covered even when absent
+from the registered action's InputGestures.
+
 Physical keyboard input verified exactly-once dispatch after explicit conflict
 transfer, the waiting overlay, and a chord remapped through JSON. Restarting with
 Better Shortcuts absent preserved native theme/audio-buffer/trace-color values,
@@ -157,8 +173,8 @@ and mod preference files are hash-checked independently of the disposable profil
 The live bridge refuses to initialize in a marked lab whose native roaming/local
 preference paths still point outside the disposable application directory.
 
-Release builds complete with zero warnings/errors. Offline checks: 37 live-file,
-36 Windows bridge, 165 Windows WPF controls and 8 existing store checks. This is
+Release builds complete with zero warnings/errors. Offline checks: 40 live-file,
+38 Windows bridge, 177 Windows WPF controls and 8 existing store checks. This is
 source and scoped application acceptance, not a release or installation into the
 regular Designer. Audio-engine/hardware behavior, every General setting, all
 editor/floating/UCI scopes, and a competing live process remain outside this

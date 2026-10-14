@@ -78,6 +78,13 @@ using (var broken = new SettingsSynchronizer(badPath, brokenTarget))
     File.WriteAllText(badPath, SettingsJson.Text(change)); broken.Poll(); broken.Poll();
     Check(broken.Faulted && broken.Error!.Contains("recovery failed"), "Rollback failure stops live sync");
     int attempts = brokenTarget.Applications; broken.Poll(); Check(brokenTarget.Applications == attempts, "Stopped sync never repeats a failed mutation");
+    string recoveryPath = Path.Combine(Path.GetDirectoryName(badPath)!, "settings.last-good.json");
+    string recovery = File.ReadAllText(recoveryPath), error = broken.Error!;
+    broken.Recreate(); Check(broken.Error == error, "Opening an existing faulted file preserves the recovery error");
+    File.Delete(badPath); brokenTarget.Value["mods"]!["example"]!["Gap"] = 99;
+    Reject(broken.Recreate, "A faulted service cannot recreate settings from unverified live state");
+    Check(!File.Exists(badPath) && broken.Error == error && File.ReadAllText(recoveryPath) == recovery,
+        "Failed recovery keeps its error and last-good snapshot after file removal");
 }
 Console.WriteLine($"Passed {count} live settings checks. No Q-SYS preferences were accessed.");
 

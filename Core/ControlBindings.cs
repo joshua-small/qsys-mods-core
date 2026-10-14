@@ -61,14 +61,19 @@ public sealed class ControlBindings : IDisposable
     {
         var names = Commands.All.Where(c => c != command && Commands.IsAvailable(c)
             && RawEffective(c, overrides).Any(sequence.Conflicts)).Select(c => c.Definition.Name).ToList();
-        names.AddRange(OriginalInputs(command.Definition.AllowInText).Where(b => sequence.First == new ControlStroke(b.Key, b.Modifiers)
-            && !ReferenceEquals(b.Command, command.Command)
-            && !Commands.All.Any(c => c.Definition.Native is { } native && ReferenceEquals(native, b.Command)
-                && (overrides.ContainsKey(c.Definition.Id) || ManagedDefault(c))))
+        names.AddRange(ProtectedInputs(command, overrides, command.Definition.AllowInText).Where(b => sequence.First == new ControlStroke(b.Key, b.Modifiers))
             .Select(_ => "Native/editor input binding"));
         names.AddRange(MenuAccessKeys().Where(m => m.Stroke == sequence.First).Select(m => m.Name + " menu access key"));
         return names.Distinct().ToArray();
     }
+    // Registered native actions may also have direct InputBindings absent from
+    // their InputGestures. Only an explicit native override/managed declaration
+    // removes those bindings; otherwise they still require takeover consent.
+    private IEnumerable<KeyBinding> ProtectedInputs(RegisteredCommand command, Dictionary<string, string> overrides, bool includeFloating = false) =>
+        OriginalInputs(includeFloating).Where(b => !ReferenceEquals(b.Command, command.Command)
+            && !ReferenceEquals(b.Command, command.Definition.Native)
+            && !Commands.All.Any(c => c.Definition.Native is { } native && ReferenceEquals(native, b.Command)
+                && (overrides.ContainsKey(c.Definition.Id) || ManagedDefault(c))));
     /// <summary>Defaults left inactive by Core, including chord-prefix conflicts.</summary>
     public IReadOnlyList<DefaultShortcutConflict> DefaultConflicts(Dictionary<string, string> overrides) => Commands.All
         .Where(c => Commands.IsAvailable(c) && ModDefault(c) && !overrides.ContainsKey(c.Definition.Id))
@@ -117,12 +122,16 @@ public sealed class ControlBindings : IDisposable
         foreach (var pair in desired)
         {
             var selected = Commands.All.Single(c => c.Definition.Id == pair.Key);
-            var editorConflicts = OriginalInputs(selected.Definition.Native is null && selected.Definition.AllowInText)
-            .Where(input => pair.Value.Any(g => g.First.Key == input.Key && g.First.Modifiers == input.Modifiers)
-            && !Commands.All.Any(c => ReferenceEquals(c.Definition.Native, input.Command) || ReferenceEquals(c.Command, input.Command)))
+            var editorConflicts = ProtectedInputs(selected, change.Overrides, selected.Definition.Native is null && selected.Definition.AllowInText)
+            .Where(input => pair.Value.Any(g => g.First.Key == input.Key && g.First.Modifiers == input.Modifiers))
             .ToArray();
             if (editorConflicts.Length > 0)
+            {
                 change.EditorOverrides[pair.Key] = ControlSequence.Join(pair.Value.Where(g => editorConflicts.Any(i => g.First == new ControlStroke(i.Key, i.Modifiers))));
+                // A reviewed Reset is an explicit choice when a native/editor
+                // binding must yield; leaving it implicit would suppress it again.
+                change.Overrides[pair.Key] = ControlSequence.Join(pair.Value);
+            }
             names.AddRange(editorConflicts.Select(input =>
             (input.Command is RoutedUICommand ui ? ui.Text : input.Command is RoutedCommand routed ? routed.Name : "Editor binding")
                 + " (" + Format(new KeyGesture(input.Key, input.Modifiers)) + ")"));
@@ -134,6 +143,7 @@ public sealed class ControlBindings : IDisposable
             var matches = MenuAccessKeys().Where(m => pair.Value.Any(g => g.First == m.Stroke)).ToArray();
             if (matches.Length == 0) continue;
             names.AddRange(matches.Select(m => m.Name + " menu access key (" + m.Stroke.Label + ")"));
+            change.Overrides[pair.Key] = ControlSequence.Join(pair.Value);
             change.EditorOverrides[pair.Key] = ControlSequence.Join(ControlSequence.ParseList(change.EditorOverrides.GetValueOrDefault(pair.Key, ""))
                 .Concat(pair.Value.Where(g => matches.Any(m => m.Stroke == g.First))));
         }
@@ -164,6 +174,11 @@ public sealed class ControlBindings : IDisposable
         foreach (var command in Commands.All.Where(Commands.IsAvailable))
             foreach (var gesture in Effective(command, settings.Overrides))
             {
+                if (settings.Overrides.ContainsKey(command.Definition.Id)
+                    && !ControlSequence.ParseList(settings.EditorOverrides?.GetValueOrDefault(command.Definition.Id, "") ?? "").Contains(gesture)
+                    && (ProtectedInputs(command, settings.Overrides, command.Definition.Native is null && command.Definition.AllowInText).Any(b => gesture.First == new ControlStroke(b.Key, b.Modifiers))
+                        || MenuAccessKeys().Any(m => m.Stroke == gesture.First)))
+                    throw new ArgumentException(gesture.Label + " conflicts with a native/editor binding or menu access key and requires matching EditorOverrides consent.");
                 foreach (var collision in occupied.Where(o => o.Sequence.Conflicts(gesture) && (o.Command != command || o.Sequence != gesture)))
                 {
                     var other = collision.Command;
@@ -176,8 +191,8 @@ public sealed class ControlBindings : IDisposable
                 }
                 occupied.Add((gesture, command));
             }
-        // Explicit editor InputBindings are warned about in Prepare and suppressed
-        // reversibly by Apply. They must not turn a confirmed overwrite into an error.
+        // Prepare supplies scoped consent; direct settings edits must supply it
+        // too. Apply suppresses those bindings reversibly after validation.
     }
     public void Apply(BindingSettings settings)
     {
