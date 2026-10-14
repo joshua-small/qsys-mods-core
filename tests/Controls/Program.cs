@@ -3,7 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using QsysMods.Core;
 
-internal static class Program
+internal static partial class Program
 {
     static int checks;
     static void Check(bool value, string message) { if (!value) throw new Exception(message); checks++; }
@@ -96,6 +96,7 @@ internal static class Program
         PlanTests(); MigratedTransferTests(); GroupTests(window, canvas);
         AliasTests(native);
         MenuHintTests(window);
+        ChordTests(window);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
     }
     static void MenuHintTests(Window window)
