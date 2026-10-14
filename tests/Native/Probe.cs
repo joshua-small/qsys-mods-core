@@ -40,6 +40,8 @@ public sealed class Probe : IDesignerModule
     private static Task Idle() => Application.Current.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle).Task;
     private static TabControl Tabs(Window window) => Preferences.Logical(window).OfType<TabControl>().Single();
     private static TabItem Page(Window window, string id) => Tabs(window).Items.OfType<TabItem>().Single(t => Equals(t.Tag, "qsys-mod:" + id));
+    private static Selector Shortcuts(DependencyObject page) => Preferences.Logical(page).OfType<Selector>()
+        .Single(s => s is ListBox || s is DataGrid { Name: "ShortcutTable" });
     private Window OpenPreferences()
     {
         var window = (Window)Activator.CreateInstance(Host.Type("QSC.QSys.windows.Dialogs.PreferencesDialog"))!;
@@ -97,7 +99,21 @@ public sealed class Probe : IDesignerModule
             prefs = OpenPreferences(); await Idle(); Require(Preferences.Logical(Page(prefs, "better-packing")).OfType<TextBox>().Single().Text == "37", "Saved value did not reopen.");
             Tabs(prefs).SelectedItem = Page(prefs, "better-shortcuts"); await Idle(); Render(prefs, "preferences-shortcuts");
             var shortcutPage = Page(prefs,"better-shortcuts");
-            var list = Preferences.Logical(shortcutPage).OfType<ListBox>().Single();
+            var list = Shortcuts(shortcutPage);
+            if (list is DataGrid table)
+            {
+                Require(table.Columns.Select(c => c.Header.ToString()).SequenceEqual(new[] { "Command", "Keybinding", "When", "Source" }), "Shortcut table columns differ.");
+                Require(table.Items.Cast<object>().Any(c => Host.Property(c,"Id").ToString()=="help/control-position"), "Official gesture reference missing.");
+                table.SelectedItem = table.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="help/control-position");
+                Require(Preferences.Logical(shortcutPage).OfType<Button>().Where(b => b.Content is "Assign" or "Clear" or "Reset").All(b => !b.IsEnabled), "Reference row allows assignment.");
+                var search = Preferences.Logical(shortcutPage).OfType<TextBox>().Single(t => t.Name == "ShortcutSearch");
+                search.Text = "Ctrl+Shift+Backspace";
+                Require(table.Items.Count == 1 && Host.Property(table.Items[0],"Id").ToString()=="help/app-zoom-reset", "Shortcut search did not match the keybinding.");
+                search.Text = "xyz-no-such-shortcut";
+                Require(table.Items.Count == 0, "No-match search is not empty.");
+                search.Clear();
+                checks.Add(new { shortcutTableColumns=true, referenceRowsReadOnly=true, keybindingSearch=true });
+            }
             list.SelectedItem = list.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
             var gestureBox = Preferences.Logical(shortcutPage).OfType<TextBox>().Last();
             void Click(DependencyObject owner, string label) => Preferences.Logical(owner).OfType<Button>().Single(b=>Equals(b.Content,label)).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -107,7 +123,7 @@ public sealed class Probe : IDesignerModule
             Preferences.Logical(prefs).OfType<Button>().Single(b=>b.IsDefault).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs=null; await Idle();
             Require(main.InputBindings.OfType<KeyBinding>().Any(b=>b.Command is RoutedCommand c && c.Name=="better-shortcuts/dark-mode" && b.Key==Key.F11),"Custom shortcut did not apply.");
             prefs=OpenPreferences(); await Idle(); shortcutPage=Page(prefs,"better-shortcuts");
-            list=Preferences.Logical(shortcutPage).OfType<ListBox>().Single(); list.SelectedItem=list.Items.Cast<object>().Single(c=>Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
+            list=Shortcuts(shortcutPage); list.SelectedItem=list.Items.Cast<object>().Single(c=>Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
             Click(shortcutPage,"Reset"); Preferences.Logical(prefs).OfType<Button>().Single(b=>b.IsDefault).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs=null; await Idle();
             Require(main.InputBindings.OfType<KeyBinding>().Any(b=>b.Command is RoutedCommand c && c.Name=="better-shortcuts/dark-mode" && b.Key==Key.D),"Shortcut reset did not restore the default.");
             checks.Add(new { shortcutConflictRejected=true, customShortcutSaved=true, resetRestoredDefault=true });
