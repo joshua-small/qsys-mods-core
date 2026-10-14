@@ -11,3 +11,4 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet run --project tests/Settings/Settings.csproj
+      - run: dotnet run --project tests/SettingsJson/SettingsJson.csproj
