@@ -29,6 +29,10 @@ This source candidate changes default resolution:
 - Conflicting explicit assignments still fail validation. Intentional overwrite
   and reset use Core's existing prepare/review/apply plan, preserving unrelated
   alternatives. The live JSON interface rejects unresolved explicit conflicts.
+  Known native/editor InputBindings and menu access keys also require matching
+  `EditorOverrides` consent, including chord prefixes. A reviewed Reset that
+  takes one of those keys stores an explicit assignment so the chosen default
+  becomes active instead of being suppressed again.
 
 `ModCommand.DefaultGesture` declares an ordinary default. Leave it null and use
 `ModControls.RegisterShortcut` for a reviewed proposal. Native replacements retain
@@ -38,7 +42,7 @@ the same keys. The integrated chord API uses `ModCommand.DefaultBinding` and
 precedence applies to legacy gestures, chords and a single key that is also a
 chord prefix. Different chord completions can share a prefix.
 
-The combined suite has 165 WPF checks, including default collisions, precedence,
+The combined suite has 177 WPF checks, including default collisions, precedence,
 reporting, reviewed reset, menu access keys, chord parsing and prefix conflicts.
 See [live settings validation](SETTINGS-JSON.md) for disposable-Designer evidence.
 

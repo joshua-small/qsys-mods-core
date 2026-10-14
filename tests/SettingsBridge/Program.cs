@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using QsysMods.Core;
 
 static class Program
@@ -46,6 +47,15 @@ static class Program
         Reject(() => target.Validate(badMod), "Typed mod field typos are rejected");
         var invalidKeys = (JsonObject)edit.DeepClone(); invalidKeys["mods"]![ModControls.SettingsId]!["Bindings"]!["Overrides"]!["missing/action"] = "invalid key";
         Reject(() => target.Validate(invalidKeys), "Shared shortcuts use Core validation");
+        var menuCommand = Commands.Register(new("example-mod/key", "Example key", "Fixture", () => { }, () => true));
+        tools.Header = "_Tools";
+        var menuKeys = (JsonObject)edit.DeepClone(); menuKeys["mods"]![ModControls.SettingsId]!["Bindings"]!["Overrides"]![menuCommand.Definition.Id] = "Alt+T";
+        Reject(() => target.Validate(menuKeys), "JSON cannot claim a menu access key without overwrite consent");
+        tools.Header = "Tools";
+        var directInput = new KeyBinding(new RoutedCommand("Bridge editor", typeof(Program)), new KeyGesture(Key.F22, ModifierKeys.Control | ModifierKeys.Alt)); window.InputBindings.Add(directInput);
+        menuKeys["mods"]![ModControls.SettingsId]!["Bindings"]!["Overrides"]![menuCommand.Definition.Id] = "Ctrl+Alt+F22 > P";
+        Reject(() => target.Validate(menuKeys), "JSON cannot claim an editor chord prefix without overwrite consent");
+        window.InputBindings.Remove(directInput);
         Check(FakeGeneral.Saved.Theme == Choice.Dark && settings.Value.Gap == 33, "Invalid candidates leave applied values intact");
         edit["qsys"]!["hardLinks"] = new JsonArray(new JsonObject { ["Name"] = "Test", ["IpAddress"] = "192.0.2.1", ["IsEnabled"] = true });
         target.Validate(edit); target.Apply(edit);

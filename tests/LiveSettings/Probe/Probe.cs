@@ -26,6 +26,7 @@ public sealed class Probe : ModModule
             Register("native", new(Key.S, ModifierKeys.Control));
             Register("prefix", null, "Ctrl+Alt+F10"); Register("chord", null, "Ctrl+Alt+F10 > P");
             Register("physical", null, "Ctrl+Alt+F11 > P");
+            Register("menu", new(Key.F, ModifierKeys.Alt));
             timer = new DispatcherTimer(DispatcherPriority.ContextIdle) { Interval = TimeSpan.FromMilliseconds(500) };
             timer.Tick += async (_, _) =>
             {
@@ -114,6 +115,17 @@ public sealed class Probe : ModModule
             await Until(() => SharedSettings.Error is not null);
             Check(ModControls.Current.Bindings.Overrides.Count == 0, "Explicit chord-prefix JSON conflict is rejected");
             File.WriteAllText(SharedSettings.PathName, accepted); await Until(() => SharedSettings.Error is null);
+            Edit(doc => doc["mods"]![ModControls.SettingsId]!["Bindings"]!["Overrides"] = new JsonObject { ["settings-lab/menu"] = "Alt+F" });
+            await Until(() => SharedSettings.Error is not null);
+            Check(SharedSettings.Error!.Contains("EditorOverrides") && ModControls.Current.Bindings.Overrides.Count == 0, "JSON menu takeover requires matching overwrite consent");
+            File.WriteAllText(SharedSettings.PathName, accepted); await Until(() => SharedSettings.Error is null);
+            var menuReset = ModControls.Bindings.Prepare("settings-lab/menu", null, new());
+            Check(menuReset.Overrides.GetValueOrDefault("settings-lab/menu") == "Alt+F" && menuReset.EditorOverrides.GetValueOrDefault("settings-lab/menu") == "Alt+F", "Reviewed native-menu reset records explicit assignment and consent");
+            Edit(doc => { doc["mods"]![ModControls.SettingsId]!["Bindings"]!["Overrides"] = JsonSerializer.SerializeToNode(menuReset.Overrides);
+                doc["mods"]![ModControls.SettingsId]!["Bindings"]!["EditorOverrides"] = JsonSerializer.SerializeToNode(menuReset.EditorOverrides); });
+            await Until(() => ModControls.Current.Bindings.Overrides.GetValueOrDefault("settings-lab/menu") == "Alt+F");
+            Check(SharedSettings.Error is null && ModControls.Bindings.Display("settings-lab/menu", ModControls.Current.Bindings.Overrides) == "Alt+F", "Reviewed native-menu reset applies through live JSON");
+            File.WriteAllText(SharedSettings.PathName, accepted); await Until(() => ModControls.Current.Bindings.Overrides.Count == 0 && SharedSettings.Error is null);
             Edit(doc => doc["mods"]![ModControls.SettingsId]!["Bindings"]!["Overrides"] = new JsonObject { ["settings-lab/first"] = "Ctrl+Alt+F9" });
             await Until(() => ModControls.Current.Bindings.Overrides.ContainsKey("settings-lab/first"));
             Check(ModControls.Bindings.Display("settings-lab/second", ModControls.Current.Bindings.Overrides) == "", "Explicit user choice wins over competing default");

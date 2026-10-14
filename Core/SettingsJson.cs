@@ -178,6 +178,7 @@ public sealed class SettingsSynchronizer : IDisposable
     public void Recreate()
     {
         if (File.Exists(path)) return;
+        if (Faulted) throw new InvalidOperationException(Error);
         var live = target.Capture(); var text = SettingsJson.Text(live);
         SettingsJson.Write(path, text, null); SaveGood(live); baseline = live; acceptedText = text; pending = false; rejected = false; SetError(null);
     }
