@@ -94,7 +94,52 @@ internal static class Program
         int before = nativeRuns; testCommand.Execute(null, isolated); Check(nativeRuns == before + 1, "Router disposal restores native");
         EngineAndReviewTests(window, canvas, id);
         PlanTests(); MigratedTransferTests(); GroupTests(window, canvas);
+        AliasTests(native);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
+    }
+    static void AliasTests(RoutedCommand native)
+    {
+        string id = Commands.NativeId(native), old = "alias-fixture/left";
+        Mods.InitializingId = "alias-fixture"; Mods.States["alias-fixture"] = "Ready";
+        Commands.RegisterNativeAlias(old, native);
+        Commands.RegisterNativeAlias("alias-fixture/alternate", native);
+        Reject(() => Commands.RegisterNativeAlias(old, native), "Duplicate alias rejected");
+        Reject(() => Commands.RegisterNativeAlias("another-mod/left", native), "Alias must belong to declaring mod");
+        Mods.InitializingId = null;
+        Check(!Commands.All.Any(c => c.Definition.Id == old), "Alias creates no duplicate shortcut row or action");
+        BindingSettings Migrate(Dictionary<string,string> keys, Dictionary<string,string>? consent = null) => ModControls.Bindings.MigrateAliases(new(keys, consent));
+        var defaults = Migrate(new());
+        Check(!defaults.Overrides.ContainsKey(id) && ModControls.Bindings.Display(id, defaults.Overrides) == "Ctrl+Shift+L", "No old assignment leaves actual native defaults intact");
+        var original = new BindingSettings(new() { [old] = "Ctrl+Shift+L", [id] = "", ["absent/action"] = "Ctrl+F21" }, new() { [old] = "Ctrl+Shift+L", ["absent/action"] = "Ctrl+F21" });
+        var moved = ModControls.Bindings.MigrateAliases(original);
+        Check(moved.Overrides[id] == "Ctrl+Shift+L" && !moved.Overrides.ContainsKey(old), "Former duplicate overwrite restores the cleared native action");
+        Check(moved.EditorOverrides![id] == "Ctrl+Shift+L" && !moved.EditorOverrides.ContainsKey(old), "Approved editor consent follows the transferred keys");
+        Check(moved.Overrides["absent/action"] == "Ctrl+F21" && moved.EditorOverrides["absent/action"] == "Ctrl+F21", "Absent settings retained");
+        Check(original.Overrides[id] == "" && original.Overrides.ContainsKey(old), "Migration does not mutate source settings");
+        var again = ModControls.Bindings.MigrateAliases(moved);
+        Check(again.Overrides.OrderBy(p=>p.Key).SequenceEqual(moved.Overrides.OrderBy(p=>p.Key)), "Migration is idempotent");
+        var alternatives = Migrate(new() { [old] = "Ctrl+Alt+L" });
+        Check(alternatives.Overrides[id] == "Ctrl+Shift+L; Ctrl+Alt+L", "Keep native defaults alongside a different old mod assignment");
+        var merge = Migrate(new() { [id] = "Ctrl+Alt+L", [old] = "Ctrl+Alt+L; Ctrl+F23" });
+        Check(merge.Overrides[id] == "Ctrl+Alt+L; Ctrl+F23", "Keep custom native alternatives and deduplicate identical keys");
+        var cleared = Migrate(new() { [old] = "" });
+        Check(!cleared.Overrides.ContainsKey(id) && !cleared.Overrides.ContainsKey(old), "Cleared standalone action must not clear native defaults");
+        Check(Migrate(new() { [old] = "", [id] = "" }).Overrides[id] == "", "An explicit native clear is preserved");
+        var many = Migrate(new() { [old] = "Ctrl+F23", ["alias-fixture/alternate"] = "Ctrl+F24", [id] = "" });
+        var reversed = Migrate(new() { [id] = "", ["alias-fixture/alternate"] = "Ctrl+F24", [old] = "Ctrl+F23" });
+        Check(many.Overrides[id] == reversed.Overrides[id] && ControlGestures.ParseList(many.Overrides[id]).Length == 2, "Multiple aliases merge independent of saved order");
+        Mods.States["alias-fixture"] = "Initialization failed";
+        Check(Migrate(new() { [old] = "Ctrl+F23" }).Overrides.ContainsKey(old), "Failed provider cannot consume legacy assignments");
+        Mods.States["alias-fixture"] = "Ready";
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "alias-migration-" + Guid.NewGuid().ToString("N"), "preferences.json");
+        new SettingsStore(path).Save(new Dictionary<string, object> { [ModControls.SettingsId] = ControlSettings.Empty() with { Bindings = original } });
+        var before = System.IO.File.ReadAllText(path);
+        var loaded = ModControls.Load(new SettingsStore(path));
+        Check(loaded.Bindings.Overrides[id] == "Ctrl+Shift+L" && System.IO.File.ReadAllText(path) == before, "Load migrates without writing the original preferences");
+        var reset = ModControls.Bindings.Prepare(id, null, loaded.Bindings.Overrides, loaded.Bindings.EditorOverrides);
+        Check(!reset.Overrides.ContainsKey(id) && !reset.Overrides.ContainsKey(old) && ModControls.Bindings.Display(id, reset.Overrides) == "Ctrl+Shift+L", "Reset restores native default without resurrecting duplicate");
+        var clear = ModControls.Bindings.Prepare(id, "", loaded.Bindings.Overrides, loaded.Bindings.EditorOverrides);
+        Check(clear.Overrides[id] == "" && !clear.EditorOverrides.ContainsKey(id), "Clear removes canonical key and editor consent");
     }
     static void GroupTests(Window window, Canvas canvas)
     {

@@ -43,6 +43,33 @@ public sealed class ControlBindings : IDisposable
     public string Display(string id, Dictionary<string, string> overrides) => ControlGestures.Join(Effective(Commands.All.Single(c => c.Definition.Id == id), overrides));
     public string Input(string id, Dictionary<string, string> overrides) =>
         Format(Effective(Commands.All.Single(c => c.Definition.Id == id), overrides).FirstOrDefault());
+    internal BindingSettings MigrateAliases(BindingSettings settings)
+    {
+        var next = new Dictionary<string, string>(settings.Overrides);
+        var editors = new Dictionary<string, string>(settings.EditorOverrides ?? new());
+        foreach (var group in Commands.NativeAliases.Where(p => next.ContainsKey(p.Key)).GroupBy(p => p.Value))
+        {
+            var target = Commands.All.Single(c => c.Definition.Id == group.Key);
+            var retained = Effective(target, settings.Overrides).ToList();
+            var consent = ControlGestures.ParseList(editors.GetValueOrDefault(group.Key, "")).ToList();
+            bool moved = false;
+            foreach (var alias in group.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                var keys = ControlGestures.ParseList(next[alias.Key]);
+                retained.AddRange(keys); moved |= keys.Length > 0;
+                consent.AddRange(ControlGestures.ParseList(editors.GetValueOrDefault(alias.Key, ""))
+                    .Where(g => keys.Any(k => ControlGestures.Same(k, g))));
+                next.Remove(alias.Key); editors.Remove(alias.Key);
+            }
+            // Clearing the old standalone action never clears the native action.
+            // A populated alias restores an explicitly cleared native action, as
+            // happens after confirming overwrite on the former duplicate row.
+            if (moved) next[group.Key] = ControlGestures.Join(retained);
+            var claims = ControlGestures.Join(consent.Where(g => retained.Any(k => ControlGestures.Same(k, g))));
+            if (claims.Length > 0) editors[group.Key] = claims; else editors.Remove(group.Key);
+        }
+        return new(next, editors);
+    }
     public BindingChange Prepare(string id, string? value, Dictionary<string, string> draft, Dictionary<string, string>? editorOverrides = null)
         => Prepare(new Dictionary<string, string?> { [id] = value }, draft, editorOverrides);
     public BindingChange Prepare(IReadOnlyDictionary<string, string?> requests, Dictionary<string, string> draft, Dictionary<string, string>? editorOverrides = null)
