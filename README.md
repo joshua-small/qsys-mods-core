@@ -14,7 +14,7 @@ Settings are stored in `%LOCALAPPDATA%\QsysMods\Designer-10.5\preferences.json`.
 
 ## Shared controls
 
-Core 0.1.3 provides feature-owned, all-or-none native-action replacements and atomic bulk key overwrite. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. Retired duplicate mod actions can alias their native action, migrating saved keys without creating a second row. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and validation](docs/MOD-CONTROLS.md). Install the three matching builds together; pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
+Core 0.1.4 provides feature-owned, all-or-none native-action replacements and atomic bulk key overwrite. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. Retired duplicate mod actions can alias their native action, migrating saved keys without creating a second row. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and validation](docs/MOD-CONTROLS.md). Use Core/Shortcuts 0.1.4 with Packing 0.1.3; pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
 
 ## Mod API
 
@@ -22,6 +22,7 @@ Reference `Core/Qmm.Shared.ModsCore.csproj` while developing, and ship a depende
 
 - Derive the native loader from `ModModule` and call `Mods.Register(id, initialize)`. Initialization waits for native commands and isolates individual mod failures. Loader-only menu entries are hidden.
 - Register stable command IDs with `Commands.Register(new ModCommand(...))`. A command has a name, group, action, availability predicate, optional default gesture, and optional menu entry. Duplicate IDs fail. Menus work without Better Shortcuts. Native adapters keep Q-SYS's routed `CanExecute` behavior.
+- During initialization, `Commands.RegisterMenuHint(menuItem, commandId)` links an existing host menu to an action owned by that mod without replacing the menu's command or click handler. Core renders current effective keys, including alternatives and cleared assignments, and restores the original hint when the provider is unavailable. Added menu items using registered commands receive hints automatically. `ControlGestures.MenuText` formats display labels separately from invariant settings serialization.
 - Register a typed page with `Preferences.Register`. Its editor returns a view and a reader; validation must not mutate live settings. The returned `ModSettings<T>.Changed` event fires after a successful save. Consumers must unsubscribe when their windows close.
 - Use `Host.Theme(window)` for live host styles and `Host.Receipt` for best-effort local diagnostics. Editing operations use `Host.RequiredReceipt` before their first mutation so a write failure stops the operation. `HostSelection` contains the extracted, version-scoped selection/geometry helpers.
 

@@ -95,7 +95,55 @@ internal static class Program
         EngineAndReviewTests(window, canvas, id);
         PlanTests(); MigratedTransferTests(); GroupTests(window, canvas);
         AliasTests(native);
+        MenuHintTests(window);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
+    }
+    static void MenuHintTests(Window window)
+    {
+        var menu = (Menu)window.FindName("mainMenu");
+        var tools = (MenuItem)window.FindName("mainMenu_Tools");
+        var programmer = new MenuItem { Header = "Programmer", InputGestureText = "Host hint" };
+        int clicks = 0; programmer.Click += (_, _) => clicks++;
+        var info = new RoutedUICommand("Info", "Info", typeof(Program));
+        var infoMenu = new MenuItem { Header = "Info", Command = info };
+        var preferences = new RoutedUICommand("Preferences", "Preferences", typeof(Program));
+        var preferencesMenu = new MenuItem { Header = "Preferences", Command = preferences };
+        tools.Items.Add(programmer); tools.Items.Add(infoMenu); tools.Items.Add(preferencesMenu);
+        var prefsEntry = Commands.Register(new(Commands.NativeId(preferences), "Preferences", "Q-SYS", () => {}, () => true, Native: preferences));
+        Commands.Register(new(Commands.NativeId(info), "Info", "Q-SYS", () => {}, () => true, Native: info));
+        Mods.InitializingId = "menu-fixture"; Mods.States["menu-fixture"] = "Ready";
+        var programAction = Commands.Register(new("menu-fixture/programmer", "Programmer", "Fixture", () => {}, () => true, new(Key.P, ModifierKeys.Control | ModifierKeys.Alt)));
+        var infoAction = Commands.Register(new("menu-fixture/info", "Info", "Fixture", () => {}, () => true, new(Key.I, ModifierKeys.Control | ModifierKeys.Alt)));
+        Commands.RegisterMenuHint(programmer, programAction.Definition.Id);
+        Commands.RegisterMenuHint(infoMenu, infoAction.Definition.Id);
+        Reject(() => Commands.RegisterMenuHint(infoMenu, prefsEntry.Definition.Id), "Hint cannot claim another provider's action");
+        Mods.InitializingId = null;
+        var view = new MenuItem { Header = "View" }; var submenu = new MenuItem { Header = "Sidebars" };
+        var nestedAction = new MenuItem { Header = "Nested action", Command = programAction.Command };
+        submenu.Items.Add(nestedAction); view.Items.Add(submenu); menu.Items.Add(view);
+        var snapshot = ModControls.Current;
+        var state = snapshot.Copy(); state.Bindings.Overrides[prefsEntry.Definition.Id] = "Ctrl+OemComma";
+        ModControls.Bindings.Apply(state.Bindings);
+        Check(preferencesMenu.InputGestureText == "Ctrl+,", "Menu punctuation must be readable instead of serialized OEM names");
+        Check(programmer.InputGestureText == "Ctrl+Alt+P" && infoMenu.InputGestureText == "Ctrl+Alt+I", "Existing click and native menus show default mod shortcuts");
+        Check(nestedAction.InputGestureText == "Ctrl+Alt+P", "Nested menus show current default bindings");
+        Check(programmer.Command is null && ReferenceEquals(infoMenu.Command, info), "Hint registration preserves native commands and click handlers");
+        programmer.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Check(clicks == 1, "Host click handler still executes once");
+        state.Bindings.Overrides[programAction.Definition.Id] = "Ctrl+OemPeriod; Ctrl+NumPad0";
+        state.Bindings.Overrides[infoAction.Definition.Id] = "";
+        ModControls.Bindings.Apply(state.Bindings);
+        Check(programmer.InputGestureText == "Ctrl+. or Ctrl+NumPad 0" && nestedAction.InputGestureText == programmer.InputGestureText, "Saved remaps and alternatives refresh every linked menu");
+        Check(infoMenu.InputGestureText == "", "Clear removes the menu shortcut hint");
+        state.Bindings.Overrides.Remove(infoAction.Definition.Id);
+        ModControls.Bindings.Apply(state.Bindings);
+        Check(infoMenu.InputGestureText == "Ctrl+Alt+I", "Reset restores the menu shortcut hint");
+        Mods.States["menu-fixture"] = "Initialization failed"; ModControls.Bindings.Apply(state.Bindings);
+        Check(programmer.InputGestureText == "Host hint", "A failed provider restores the original host hint");
+        Mods.States["menu-fixture"] = "Ready"; ModControls.Bindings.Apply(snapshot.Bindings);
+        Check(preferencesMenu.InputGestureText == "", "Removing a native remap restores the original hint");
+        Check(ControlGestures.MenuText([new(Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift), new(Key.Add, ModifierKeys.Control | ModifierKeys.Shift)]) == "Ctrl+Shift+= or Ctrl+Shift+NumPad +", "OEM plus and keypad plus remain distinct");
+        Check(ControlGestures.MenuText([new(Key.Oem1, ModifierKeys.Control), new(Key.OemComma, ModifierKeys.Control), new(Key.OemComma, ModifierKeys.Control, "alias")]) == "Ctrl+; or Ctrl+,", "Literal semicolon and comma survive presentation and duplicate labels disappear");
+        Check(ControlGestures.Serialize(new(Key.OemComma, ModifierKeys.Control)) == "Ctrl+OemComma", "Menu formatting never changes persisted key identity");
     }
     static void AliasTests(RoutedCommand native)
     {
