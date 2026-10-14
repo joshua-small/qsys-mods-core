@@ -1,0 +1,13 @@
+name: Shared control contracts
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  controls:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet run --project tests/Controls --configuration Release --artifacts-path artifacts/controls

@@ -23,9 +23,9 @@ public sealed class ModSettings<T>
 
 public static class Preferences
 {
-    private sealed record Page(string Id, string Name, Func<Editor> Create);
-    private sealed record Editor(FrameworkElement View, Func<object> Read, Action<object> Publish);
-    private sealed record Session(SettingsStore Store, Dictionary<string, Editor> Editors);
+    private sealed record Page(string Id, string Name, Func<ControlDraft, Editor> Create);
+    private sealed record Editor(FrameworkElement View, Func<object?> Read, Action<object> Publish);
+    private sealed record Session(SettingsStore Store, Dictionary<string, Editor> Editors, ControlDraft Controls);
     private static readonly List<Page> pages = new();
     private static readonly ConditionalWeakTable<Window, Session> sessions = new();
     private static bool installed;
@@ -36,7 +36,7 @@ public static class Preferences
         if (pages.Any(p => p.Id == id)) throw new InvalidOperationException("Preferences already registered: " + id);
         var current = new SettingsStore(PathName).Read(id, defaults); validate?.Invoke(current);
         var settings = new ModSettings<T>(current);
-        pages.Add(new(id, name, () =>
+        pages.Add(new(id, name, _ =>
         {
             // Re-read disk for every dialog; opening Preferences never writes a migration.
             var value = new SettingsStore(PathName).Read(id, defaults); validate?.Invoke(value);
@@ -44,6 +44,12 @@ public static class Preferences
             return new(editor.View, () => { var next = editor.Read(); validate?.Invoke(next); return next!; }, obj => settings.Update((T)obj));
         }));
         Install(); return settings;
+    }
+    public static void RegisterControlsPage(string id, string name, Func<ControlDraft, FrameworkElement> create)
+    {
+        SettingsStore.ValidateId(id);
+        if (pages.Any(p => p.Id == id)) throw new InvalidOperationException("Preferences already registered: " + id);
+        pages.Add(new(id, name, draft => new(create(draft), () => null, _ => { })));
     }
     public static void Install()
     {
@@ -61,9 +67,10 @@ public static class Preferences
         try
         {
             var tabs = Logical(window).OfType<TabControl>().Single();
-            var session = new Session(new SettingsStore(PathName), new());
+            var store = new SettingsStore(PathName);
+            var session = new Session(store, new(), new(ModControls.Load(store)));
             // Build before mutating the host so a bad page cannot leave a half-attached session.
-            foreach (var page in pages.OrderBy(p => p.Name)) session.Editors.Add(page.Id, page.Create());
+            foreach (var page in pages.OrderBy(p => p.Name)) session.Editors.Add(page.Id, page.Create(session.Controls));
             foreach (var page in pages.OrderBy(p => p.Name))
             {
                 var view = session.Editors[page.Id].View;
@@ -80,9 +87,16 @@ public static class Preferences
         if (__instance is not Window window || !sessions.TryGetValue(window, out var session)) return true;
         try
         {
-            var values = session.Editors.ToDictionary(p => p.Key, p => p.Value.Read());
-            session.Store.Save(values);
-            foreach (var pair in values) session.Editors[pair.Key].Publish(pair.Value);
+            var values = session.Editors.Select(p => (p.Key, Value: p.Value.Read())).Where(p => p.Value is not null)
+                .ToDictionary(p => p.Key, p => p.Value!);
+            var controls = session.Controls.Value;
+            ModControls.Validate(controls);
+            values.Add(ModControls.SettingsId, controls);
+            var previous = ModControls.Current;
+            ModControls.Publish(controls);
+            try { session.Store.Save(values); }
+            catch { ModControls.Publish(previous); throw; }
+            foreach (var pair in values.Where(p => p.Key != ModControls.SettingsId)) session.Editors[pair.Key].Publish(pair.Value);
             return true;
         }
         catch (Exception ex) { Host.Error("mods-core", ex, true); return false; }
@@ -97,6 +111,12 @@ public static class Preferences
             tabs.SelectedItem = tabs.Items.OfType<TabItem>().FirstOrDefault(t => Equals(t.Tag, "qsys-mod:" + id)) ?? tabs.SelectedItem;
         };
         window.ShowDialog();
+    }
+    public static void SelectPage(FrameworkElement source, string id)
+    {
+        if (Window.GetWindow(source) is not { } window) return;
+        var tabs = Logical(window).OfType<TabControl>().Single();
+        tabs.SelectedItem = tabs.Items.OfType<TabItem>().Single(t => Equals(t.Tag, "qsys-mod:" + id));
     }
     public static IEnumerable<DependencyObject> Logical(DependencyObject root)
     {

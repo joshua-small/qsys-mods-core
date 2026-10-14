@@ -30,6 +30,7 @@ public sealed class SettingsStore
         ValidateId(id);
         return values.TryGetValue(id, out var saved) ? saved.Deserialize<T>(Json) ?? throw new InvalidDataException("Empty preferences for " + id) : defaults();
     }
+    public bool Contains(string id) => values.ContainsKey(id);
     public void Save(IReadOnlyDictionary<string, object> changes)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

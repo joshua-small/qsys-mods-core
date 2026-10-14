@@ -84,7 +84,7 @@ public sealed class Probe : IDesignerModule
             Require(Commands.All.Any(c => c.Definition.Id == "better-shortcuts/all-sidebars"), "Shortcut mod missing.");
             var originalFile = File.Exists(Preferences.PathName) ? File.ReadAllText(Preferences.PathName) : null;
             prefs = OpenPreferences(); await Idle();
-            Require(Tabs(prefs).Items.OfType<TabItem>().Count(t => t.Tag is string s && s.StartsWith("qsys-mod:")) == 3, "Expected three configured mod pages.");
+            Require(Tabs(prefs).Items.OfType<TabItem>().Count(t => t.Tag is string s && s.StartsWith("qsys-mod:")) == 4, "Expected three feature pages and shared Mod Controls.");
             Tabs(prefs).SelectedItem = Page(prefs, "better-packing"); await Idle();
             var gap = Preferences.Logical(Page(prefs, "better-packing")).OfType<TextBox>().Single();
             Require(gap.Text == "20", "Packing default differs."); gap.Text = "37";
@@ -92,7 +92,11 @@ public sealed class Probe : IDesignerModule
             Require((File.Exists(Preferences.PathName) ? File.ReadAllText(Preferences.PathName) : null) == originalFile, "Cancel wrote preferences."); checks.Add(new { cancelPreservedFile = true });
             prefs = OpenPreferences(); await Idle();
             gap = Preferences.Logical(Page(prefs, "better-packing")).OfType<TextBox>().Single(); Require(gap.Text == "20", "Cancel retained a staged value."); gap.Text = "37";
-            var replace = Preferences.Logical(Page(prefs, "better-packing")).OfType<CheckBox>().Single(); Require(replace.IsChecked == true, "Native packing replacement is not default on."); replace.IsChecked = false;
+            var controlsPage = Page(prefs, "mod-controls");
+            var replacements = Preferences.Logical(controlsPage).OfType<CheckBox>().ToArray();
+            Require(replacements.Length == 4, "Expected four shared packing replacements.");
+            foreach (var replace in replacements) replace.IsChecked = false;
+            Preferences.Logical(controlsPage).OfType<Button>().Single(b => Equals(b.Content, "Apply selected")).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             Require(Preferences.Logical(Page(prefs, "named-signal-colors")).OfType<CheckBox>().Single().IsChecked == false, "Only default colors must default false.");
             var save = Preferences.Logical(prefs).OfType<Button>().Single(b => b.IsDefault); save.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs = null; await Idle();
             var saved = File.ReadAllText(Preferences.PathName); Require(saved.Contains("37") && saved.Contains("false"), "OK did not persist preferences.");

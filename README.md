@@ -8,9 +8,13 @@ Core supports the inspected Designer **10.5.0.0** binaries only. Runtime checks 
 
 Open **File > Preferences** for Better Packing, Named Signal Colors, and Better Shortcuts. Pages use the existing left navigation and right content area. Operation windows appear under **Tools > Q-SYS Mods**. Passive filters have no empty operation windows.
 
-Install with Q-SYS Mod Manager **0.8 or newer** and the approved schema-3 catalog. When replacing Schematic Tools 0.16 or earlier, use **Split Schematic Tools** so the bundle and replacement hooks are never enabled together. The manager preserves unrelated exact pins and an undoable copy of the old bundle. Core alone does not install any keyboard shortcuts.
+Install with Q-SYS Mod Manager **0.8 or newer** and the approved schema-3 catalog. When replacing Schematic Tools 0.16 or earlier, use **Split Schematic Tools** so the bundle and replacement hooks are never enabled together. The manager preserves unrelated exact pins and an undoable copy of the old bundle. Core owns registered default shortcuts and saved user overrides, including when Better Shortcuts is absent.
 
 Settings are stored in `%LOCALAPPDATA%\QsysMods\Designer-10.5\preferences.json`. A Preferences dialog stages every page, validates all values, then saves one document on OK. Closing or Cancel discards staged changes. Atomic replacement retains `.previous`; a file lock and a stale-document check prevent concurrent overwrites. Unknown sections survive temporarily uninstalled mods. Corrupt files are reported and preserved, not reset silently. Each mod can supply migration defaults; Named Signal Colors reads the old palette without changing its original file.
+
+## Shared controls
+
+Core 0.1.1 provides grouped first-run review, atomic bulk key overwrite, and scoped native-action replacements. Better Packing is the first provider; Better Shortcuts displays and edits the same state. See [the shared-controls contract and owner test plan](docs/MOD-CONTROLS.md). Install the three matching builds together; older Packing/Shortcuts builds are rejected to prevent competing handlers.
 
 ## Mod API
 

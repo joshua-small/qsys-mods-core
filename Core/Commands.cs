@@ -8,13 +8,17 @@ using System.Windows.Input;
 namespace QsysMods.Core;
 
 public sealed record ModCommand(string Id, string Name, string Group, Action Execute, Func<bool> CanExecute,
-    KeyGesture? DefaultGesture = null, bool InMenu = false, RoutedCommand? Native = null, bool AllowInText = false);
+    KeyGesture? DefaultGesture = null, bool InMenu = false, RoutedCommand? Native = null, bool AllowInText = false)
+{
+    public string? When { get; init; }
+}
 public sealed record RegisteredCommand(ModCommand Definition, RoutedUICommand Command);
 
 /// <summary>UI-thread registry. Menus remain usable without a shortcut provider.</summary>
 public static class Commands
 {
     private static readonly Dictionary<string, RegisteredCommand> commands = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, string> providers = new(StringComparer.Ordinal);
     private static readonly List<(CommandBinding Binding, MenuItem? Menu)> installed = new();
     private static Window? window;
     public static IReadOnlyCollection<RegisteredCommand> All => commands.Values;
@@ -24,6 +28,7 @@ public static class Commands
         if (string.IsNullOrWhiteSpace(definition.Id) || commands.ContainsKey(definition.Id)) throw new InvalidOperationException("Duplicate or empty command ID: " + definition.Id);
         var command = new RegisteredCommand(definition, new RoutedUICommand(definition.Name, definition.Id, typeof(Commands)));
         commands.Add(definition.Id, command);
+        if (definition.Native is null && Mods.InitializingId is { } provider) providers.Add(definition.Id, provider);
         if (window is not null) Attach(command);
         Changed?.Invoke(); return command;
     }
@@ -44,11 +49,11 @@ public static class Commands
         var binding = new CommandBinding(entry.Command, (_, e) =>
         {
             e.Handled = true;
-            try { if (Host.Enabled && def.CanExecute()) def.Execute(); }
+            try { if (Host.Enabled && IsAvailable(entry) && def.CanExecute()) def.Execute(); }
             catch (Exception ex) { Host.Error("mods-core", ex, true); }
         }, (_, e) =>
         {
-            try { e.CanExecute = Host.Enabled && window!.IsEnabled && def.CanExecute(); } catch { e.CanExecute = false; }
+            try { e.CanExecute = Host.Enabled && window!.IsEnabled && IsAvailable(entry) && def.CanExecute(); } catch { e.CanExecute = false; }
             e.Handled = true;
         });
         window!.CommandBindings.Add(binding);
@@ -68,8 +73,7 @@ public static class Commands
         foreach (var command in target.CommandBindings.Cast<CommandBinding>().Select(b => b.Command).OfType<RoutedCommand>()
             .Where(c => c.OwnerType != typeof(Commands)).Distinct().ToArray())
         {
-            string identity = command.OwnerType.FullName + "/" + command.Name;
-            string id = "native/" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
+            string id = NativeId(command);
             if (commands.ContainsKey(id)) continue;
             var native = command;
             var label = command is RoutedUICommand ui && !string.IsNullOrWhiteSpace(ui.Text) ? ui.Text : command.Name;
@@ -77,6 +81,10 @@ public static class Commands
                 () => native.CanExecute(null, NativeTarget(target)), native.InputGestures.OfType<KeyGesture>().FirstOrDefault(), Native: native, AllowInText: true));
         }
     }
+    public static string NativeId(RoutedCommand command) => "native/" + Convert.ToHexString(SHA256.HashData(
+        Encoding.UTF8.GetBytes(command.OwnerType.FullName + "/" + command.Name))).ToLowerInvariant()[..20];
+    public static string? ProviderId(string commandId) => providers.GetValueOrDefault(commandId);
+    public static bool IsAvailable(RegisteredCommand entry) => ProviderId(entry.Definition.Id) is not { } id || Mods.IsReady(id);
     public static IInputElement NativeTarget(Window target) => Keyboard.FocusedElement is { } focused && focused is DependencyObject obj && Window.GetWindow(obj) == target
         ? focused : target;
     public static RoutedCommand Native(string name)
