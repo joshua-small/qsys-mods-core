@@ -115,11 +115,19 @@ public sealed class Probe : IDesignerModule
                 checks.Add(new { shortcutTableColumns=true, referenceRowsReadOnly=true, keybindingSearch=true });
             }
             list.SelectedItem = list.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
-            var gestureBox = Preferences.Logical(shortcutPage).OfType<TextBox>().Last();
+            void RecordGesture(string text)
+            {
+                var recorder = Preferences.Logical(shortcutPage).OfType<FrameworkElement>().SingleOrDefault(e => e.Name == "ShortcutRecorder");
+                if (recorder is null) { Preferences.Logical(shortcutPage).OfType<TextBox>().Last().Text = text; return; }
+                var gesture = (KeyGesture)new KeyGestureConverter().ConvertFromInvariantString(text)!;
+                recorder.GetType().GetMethod("Begin", Host.Instance)!.Invoke(recorder, null);
+                recorder.GetType().GetMethod("Capture", Host.Instance)!.Invoke(recorder, new object[] { gesture.Key, gesture.Modifiers, false });
+                Require(Host.Property(recorder, "Gesture").ToString() == text, "Recorder did not capture the expected candidate.");
+            }
             void Click(DependencyObject owner, string label) => Preferences.Logical(owner).OfType<Button>().Single(b=>Equals(b.Content,label)).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            gestureBox.Text="Ctrl+Alt+0"; Click(shortcutPage,"Assign");
+            RecordGesture("Ctrl+Alt+0"); Click(shortcutPage,"Assign");
             Require(Preferences.Logical(shortcutPage).OfType<TextBlock>().Any(t=>t.Text.Contains("conflicts")),"Duplicate shortcut was not rejected.");
-            gestureBox.Text="Ctrl+Alt+F11"; Click(shortcutPage,"Assign");
+            RecordGesture("Ctrl+Alt+F11"); Click(shortcutPage,"Assign");
             Preferences.Logical(prefs).OfType<Button>().Single(b=>b.IsDefault).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs=null; await Idle();
             Require(main.InputBindings.OfType<KeyBinding>().Any(b=>b.Command is RoutedCommand c && c.Name=="better-shortcuts/dark-mode" && b.Key==Key.F11),"Custom shortcut did not apply.");
             prefs=OpenPreferences(); await Idle(); shortcutPage=Page(prefs,"better-shortcuts");
