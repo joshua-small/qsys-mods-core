@@ -21,6 +21,10 @@ public abstract class ModModule : IDesignerModule
 
 public static class Mods
 {
+    private static readonly Dictionary<string, string> status = new();
+    public static string? InitializingId { get; private set; }
+    public static bool IsReady(string id) => status.GetValueOrDefault(id) == "Ready";
+    public static string Status(string id) => status.GetValueOrDefault(id, "Not loaded");
     private static readonly Dictionary<string, Action<Window>> pending = new();
     private static readonly HashSet<string> registered = new();
     private static DispatcherTimer? timer;
@@ -31,7 +35,8 @@ public static class Mods
         SettingsStore.ValidateId(id);
         if (!Host.Enabled) return;
         if (!registered.Add(id)) throw new InvalidOperationException("Mod already registered: " + id);
-        if (ready is not null) { Run(id, initialize, ready); return; }
+        status[id] = "Waiting to initialize";
+        if (ready is not null) { Run(id, initialize, ready); ModControls.CompleteInitialization(); return; }
         pending.Add(id, initialize);
         if (timer is not null) return;
         timer = new DispatcherTimer(DispatcherPriority.ContextIdle) { Interval = TimeSpan.FromMilliseconds(500) };
@@ -45,10 +50,11 @@ public static class Mods
         timer!.Stop(); ready = main;
         try
         {
-            Preferences.Install(); Commands.Initialize(main);
+            Preferences.Install(); Commands.Initialize(main); ModControls.Initialize(main);
             Commands.Register(new("mods-core/preferences", "Mod Preferences…", "Q-SYS Mods Core", () => Preferences.Open(), () => true, InMenu: true));
             foreach (var pair in pending.ToArray()) Run(pair.Key, pair.Value, main);
             pending.Clear();
+            ModControls.CompleteInitialization();
             // The host creates a menu item for every loader adapter. Replace those with registered operations.
             foreach (var item in Menus((ItemsControl)main.FindName("mainMenu")).Where(m => m.DataContext is ModModule).ToArray())
                 item.Visibility = Visibility.Collapsed;
@@ -57,7 +63,17 @@ public static class Mods
         catch (Exception ex) { Host.Error("mods-core", ex, true); }
     }
     private static void Run(string id, Action<Window> initialize, Window window)
-    { try { initialize(window); } catch (Exception ex) { Host.Error(id, ex, true); } }
+    {
+        status[id] = "Initializing"; InitializingId = id;
+        try
+        {
+            if (id is "better-shortcuts" or "better-packing" && initialize.Method.DeclaringType?.Assembly.GetName().Version < new Version(0, 1, 1, 0))
+                throw new InvalidOperationException("Update " + id + " to 0.1.1 or newer with Mods Core. Older builds install competing control handlers.");
+            initialize(window); status[id] = "Ready";
+        }
+        catch (Exception ex) { status[id] = "Initialization failed"; Host.Error(id, ex, true); }
+        finally { InitializingId = null; }
+    }
     private static IEnumerable<MenuItem> Menus(ItemsControl parent)
     { foreach (var item in parent.Items.OfType<MenuItem>()) { yield return item; foreach (var child in Menus(item)) yield return child; } }
 }
