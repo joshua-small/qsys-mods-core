@@ -22,6 +22,7 @@ internal static class Program
         int nativeRuns = 0, packRuns = 0, errors = 0;
         window.CommandBindings.Add(new CommandBinding(native, (_, _) => nativeRuns++, (_, e) => e.CanExecute = true));
         Commands.Initialize(window); Commands.DiscoverNative(window); ModControls.Initialize(window);
+        Check(!ModControls.HasReviewControls, "Empty general control review is hidden");
         string id = Commands.NativeId(native);
         var legacy = new SettingsStore(path);
         legacy.Save(new Dictionary<string, object> { ["better-shortcuts"] = new BindingSettings(new() { [id] = "Ctrl+Alt+L", ["missing/action"] = "Ctrl+Alt+F12" }, new() { [id] = "Ctrl+Alt+L" }), ["other-mod"] = new { Keep = 42 } });
@@ -92,8 +93,88 @@ internal static class Program
         { Check(!testCommand.CanExecute(null, isolated), "Read failure is closed"); testCommand.Execute(null, isolated); Check(errors == 1, "Execution error reported once"); }
         int before = nativeRuns; testCommand.Execute(null, isolated); Check(nativeRuns == before + 1, "Router disposal restores native");
         EngineAndReviewTests(window, canvas, id);
-        PlanTests(); MigratedTransferTests();
+        PlanTests(); MigratedTransferTests(); GroupTests(window, canvas);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
+    }
+    static void GroupTests(Window window, Canvas canvas)
+    {
+        const string group = "grouped/default-controls";
+        Mods.InitializingId = "grouped"; Mods.States["grouped"] = "Ready";
+        ModControls.RegisterReplacementGroup(group, store => store.Read("group-fixture", () => true));
+        var commands = Enumerable.Range(0, 4).Select(i => new RoutedUICommand("Group " + i, "Group " + i, typeof(Program),
+            new InputGestureCollection { new KeyGesture(Key.F17 + i, ModifierKeys.Control | ModifierKeys.Shift) })).ToArray();
+        int nativeRuns = 0, replacementRuns = 0;
+        foreach (var command in commands) window.CommandBindings.Add(new CommandBinding(command, (_, _) => nativeRuns++, (_, e) => e.CanExecute = true));
+        Commands.DiscoverNative(window);
+        var members = commands.Select((command, i) => new ControlProposal("grouped/" + i, "grouped", "Grouped Mod", "1",
+            Commands.NativeId(command), command.Text, "Schematic", Scope: ControlScope.Schematic) { ReplacementGroupId = group }).ToArray();
+        foreach (var (proposal, command) in members.Zip(commands))
+            ModControls.RegisterReplacement(proposal, command, () => new(ReplacementAvailability.Ready, canvas), _ => replacementRuns++);
+        Mods.InitializingId = null;
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "qsys-group-tests-" + Guid.NewGuid().ToString("N"), "preferences.json");
+        var fresh = ModControls.Load(new SettingsStore(path));
+        Check(members.All(p => ControlPlans.Accepted(fresh, p)), "Fresh install enables all four grouped actions by default");
+        Check(!ModControls.ReviewProposals.Any(p => p.ProviderId == "grouped"), "Feature-owned group never appears in first-run/per-action review");
+        Check(!System.IO.File.Exists(path), "Default-on migration does not write preferences on load");
+        var legacyOff = new SettingsStore(path); legacyOff.Save(new Dictionary<string, object> { ["group-fixture"] = false });
+        Check(members.All(p => !ControlPlans.Accepted(ModControls.Load(new SettingsStore(path)), p)), "Legacy explicit opt-out preserved");
+        var allOff = ControlSettings.Empty(); foreach (var p in members) allOff.Decisions[p.Id] = new("1", false);
+        new SettingsStore(path).Save(new Dictionary<string, object> { ["group-fixture"] = true, [ModControls.SettingsId] = allOff });
+        Check(!ModControls.GroupEnabled(ModControls.Load(new SettingsStore(path)), group), "Previous all-off per-action choice migrates to one opt-out");
+        allOff.Decisions[members[0].Id] = new("1", true);
+        new SettingsStore(path).Save(new Dictionary<string, object> { [ModControls.SettingsId] = allOff });
+        Check(ModControls.GroupEnabled(ModControls.Load(new SettingsStore(path)), group), "Partial old selection becomes enabled as a whole");
+        var remapped = fresh.Copy(); remapped.Bindings.Overrides[members[0].CommandId] = "Ctrl+Alt+F17";
+        remapped.ReplacementGroups["absent/group"] = false;
+        ModControls.Publish(remapped);
+        var draft = new ControlDraft(remapped);
+        var view = ControlGroupPreference.Create(draft, group, "Disable default Q-SYS control overrides");
+        IEnumerable<DependencyObject> Walk(DependencyObject node)
+        {
+            yield return node;
+            foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
+                foreach (var descendant in Walk(child)) yield return descendant;
+        }
+        var check = Walk(view).OfType<CheckBox>().Single();
+        Check(check.IsChecked == false, "Opt-out is a single unchecked checkbox");
+        check.IsChecked = true;
+        Check(members.All(p => !ControlPlans.Accepted(draft.Value, p)), "Checking opt-out stages all four off");
+        foreach (var command in commands) command.Execute(null, canvas);
+        Check(replacementRuns == 4 && nativeRuns == 0, "Staged toggle does not change live routes before OK");
+        Check(ModControls.Describe(Commands.All.Single(c => c.Definition.Id == members[0].CommandId), draft.Value).Source == "Q-SYS", "Shared draft immediately reports native source");
+        Check(draft.Value.Bindings.Overrides[members[0].CommandId] == "Ctrl+Alt+F17", "Toggle preserves remapped keys");
+        ModControls.Publish(draft.Value); foreach (var command in commands) command.Execute(null, canvas);
+        Check(nativeRuns == 4 && replacementRuns == 4, "Published opt-out restores all four native actions");
+        new SettingsStore(path).Save(new Dictionary<string, object> { [ModControls.SettingsId] = draft.Value });
+        var reopened = ModControls.Load(new SettingsStore(path));
+        Check(!ModControls.GroupEnabled(reopened, group) && reopened.ReplacementGroups.ContainsKey("absent/group"), "Opt-out and absent group choices survive save/reopen");
+        check.IsChecked = false;
+        Check(members.All(p => ControlPlans.Accepted(draft.Value, p)), "Unchecking opt-out stages all four on");
+        Check(ModControls.Describe(Commands.All.Single(c => c.Definition.Id == members[0].CommandId), draft.Value).Source.Contains("Grouped Mod"), "Shared draft restores mod source");
+        Reject(() => ModControls.Prepare(draft.Value, [members[0].Id], [members[0].Id]), "Partial group enable must be rejected");
+        Mods.InitializingId = "competitor"; Mods.States["competitor"] = "Ready";
+        var rival = members[0] with { Id = "competitor/one", ProviderId = "competitor", ProviderName = "Competitor", ReplacementGroupId = null };
+        ModControls.RegisterReplacement(rival, commands[0], () => new(ReplacementAvailability.Ready, canvas), _ => { }); Mods.InitializingId = null;
+        var transfer = ModControls.Prepare(draft.Value, [rival.Id], [rival.Id]);
+        Check(transfer.Conflicts.Length > 0 && members.All(p => !ControlPlans.Accepted(transfer.Settings, p)), "Competing provider disables the whole group after overwrite");
+        draft.Stage(transfer.Settings); check.IsChecked = false;
+        Check(!ModControls.GroupEnabled(draft.Value, group) && Walk(view).OfType<TextBlock>().Any(t => t.Text.Contains("Competitor")), "Enable warns before displacing a competing provider");
+        Walk(view).OfType<Button>().Single(b => Equals(b.Content, "Keep current")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(check.IsChecked == true && ControlPlans.Accepted(draft.Value, rival), "Canceled overwrite keeps the whole original choice");
+        check.IsChecked = false;
+        Walk(view).OfType<Button>().Single(b => Equals(b.Content, "Overwrite controls")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(members.All(p => ControlPlans.Accepted(draft.Value, p)) && !ControlPlans.Accepted(draft.Value, rival), "Confirmed overwrite enables the whole group and disables the rival");
+        Check(draft.Value.Bindings.Overrides[members[0].CommandId] == "Ctrl+Alt+F17", "Provider overwrite does not rewrite keys");
+        Mods.InitializingId = "other-group"; Mods.States["other-group"] = "Ready";
+        ModControls.RegisterReplacementGroup("other-group/default", _ => true);
+        var other = rival with { Id = "other-group/one", ProviderId = "other-group", ReplacementGroupId = "other-group/default" };
+        ModControls.RegisterReplacement(other, commands[0], () => new(ReplacementAvailability.Ready, canvas), _ => { }); Mods.InitializingId = null;
+        var freshPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "qsys-group-conflict-" + Guid.NewGuid().ToString("N"), "preferences.json");
+        var defaults = ModControls.Load(new SettingsStore(freshPath));
+        Check(!ModControls.GroupEnabled(defaults, group) && !ModControls.GroupEnabled(defaults, "other-group/default"), "Conflicting fresh groups both stay off independent of registration order");
+        new SettingsStore(freshPath).Save(new Dictionary<string, object> { [ModControls.SettingsId] = draft.Value });
+        var existing = ModControls.Load(new SettingsStore(freshPath));
+        Check(ModControls.GroupEnabled(existing, group) && !ModControls.GroupEnabled(existing, "other-group/default"), "New default preserves existing explicit group choice");
     }
     static void EngineAndReviewTests(Window window, Canvas canvas, string nativeId)
     {

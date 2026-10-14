@@ -25,5 +25,6 @@ public static class Preferences
 {
     public static string PathName { get; set; } = "";
     public static void RegisterControlsPage(string id, string name, Func<ControlDraft, FrameworkElement> create) { }
+    public static void RegisterControlsPage(string id, string name, Func<ControlDraft, FrameworkElement> create, Func<bool> visible) { }
     public static void Open(string? id = null) { }
 }

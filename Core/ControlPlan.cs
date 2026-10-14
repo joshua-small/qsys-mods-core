@@ -7,8 +7,10 @@ public sealed record ControlDecision(string Revision, bool Accepted);
 public sealed record ControlSettings(BindingSettings Bindings, Dictionary<string, ControlDecision> Decisions,
     Dictionary<string, string> Notified)
 {
+    public Dictionary<string, bool> ReplacementGroups { get; init; } = new();
     public static ControlSettings Empty() => new(new(new()), new(), new());
-    public ControlSettings Copy() => new(new(new(Bindings.Overrides), new(Bindings.EditorOverrides ?? new())), new(Decisions), new(Notified));
+    public ControlSettings Copy() => new(new(new(Bindings.Overrides), new(Bindings.EditorOverrides ?? new())), new(Decisions), new(Notified))
+        { ReplacementGroups = new(ReplacementGroups) };
 }
 
 // These scopes are mutually exclusive host surfaces. Any overlaps every surface.
@@ -16,6 +18,7 @@ public enum ControlScope { Any, Schematic, Uci }
 public sealed record ControlProposal(string Id, string ProviderId, string ProviderName, string Revision,
     string CommandId, string Name, string When, string? Binding = null, ControlScope Scope = ControlScope.Any)
 {
+    public string? ReplacementGroupId { get; init; }
     public bool IsReplacement => Binding is null;
 }
 public sealed record BindingAssignment(string Id, string Name, KeyGesture[] Gestures);
@@ -67,9 +70,10 @@ public static class BindingChanges
 public static class ControlPlans
 {
     public static bool Accepted(ControlSettings settings, ControlProposal proposal) =>
+        proposal.ReplacementGroupId is { } group ? settings.ReplacementGroups.GetValueOrDefault(group) :
         settings.Decisions.TryGetValue(proposal.Id, out var decision) && decision.Revision == proposal.Revision && decision.Accepted;
     public static bool Reviewed(ControlSettings settings, ControlProposal proposal) =>
-        settings.Decisions.TryGetValue(proposal.Id, out var decision) && decision.Revision == proposal.Revision;
+        proposal.ReplacementGroupId is not null || settings.Decisions.TryGetValue(proposal.Id, out var decision) && decision.Revision == proposal.Revision;
     public static bool Overlaps(ControlProposal a, ControlProposal b) => a.CommandId == b.CommandId &&
         (a.Scope == b.Scope || a.Scope == ControlScope.Any || b.Scope == ControlScope.Any);
 
@@ -78,6 +82,9 @@ public static class ControlPlans
     {
         var next = current.Copy();
         var selected = selectedIds.Select(id => all.Single(p => p.Id == id)).ToArray();
+        foreach (var group in selected.Where(p => p.ReplacementGroupId is not null).Select(p => p.ReplacementGroupId).Distinct())
+            if (all.Any(p => p.ReplacementGroupId == group && !selectedIds.Contains(p.Id)))
+                throw new ArgumentException("A mod's replacement controls must be changed together.");
         var replacements = selected.Where(p => p.IsReplacement).ToArray();
         for (int i = 0; i < replacements.Length; i++)
             if (replacements.Skip(i + 1).Any(p => Overlaps(p, replacements[i])))
@@ -86,7 +93,8 @@ public static class ControlPlans
         foreach (var chosen in replacements)
             foreach (var other in all.Where(p => p.IsReplacement && p.Id != chosen.Id && Accepted(current, p) && Overlaps(chosen, p)))
             {
-                next.Decisions[other.Id] = new(other.Revision, false);
+                if (other.ReplacementGroupId is { } group) next.ReplacementGroups[group] = false;
+                else next.Decisions[other.Id] = new(other.Revision, false);
                 conflicts.Add(other.ProviderName + " — " + other.Name + " (replacement provider)");
             }
         var requested = new Dictionary<string, string?>();
@@ -98,7 +106,8 @@ public static class ControlPlans
         foreach (var id in reviewedIds)
         {
             var proposal = all.Single(p => p.Id == id);
-            next.Decisions[id] = new(proposal.Revision, selectedIds.Contains(id));
+            if (proposal.ReplacementGroupId is { } group) next.ReplacementGroups[group] = selectedIds.Contains(id);
+            else next.Decisions[id] = new(proposal.Revision, selectedIds.Contains(id));
             next.Notified[id] = proposal.Revision;
         }
         return new(next, conflicts.Concat(change.Conflicts).Distinct().ToArray());

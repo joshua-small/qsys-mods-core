@@ -14,7 +14,7 @@ Settings are stored in `%LOCALAPPDATA%\QsysMods\Designer-10.5\preferences.json`.
 
 ## Shared controls
 
-Core 0.1.1 provides grouped first-run review, atomic bulk key overwrite, and scoped native-action replacements. Better Packing is the first provider; Better Shortcuts displays and edits the same state. See [the shared-controls contract and owner test plan](docs/MOD-CONTROLS.md). Install the three matching builds together; older Packing/Shortcuts builds are rejected to prevent competing handlers.
+Core 0.1.2 provides feature-owned, all-or-none native-action replacements and atomic bulk key overwrite. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and owner test plan](docs/MOD-CONTROLS.md). Install the three matching builds together; pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
 
 ## Mod API
 
