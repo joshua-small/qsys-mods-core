@@ -96,7 +96,37 @@ internal static class Program
         PlanTests(); MigratedTransferTests(); GroupTests(window, canvas);
         AliasTests(native);
         MenuHintTests(window);
+        DefaultConflictTests(window);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
+    }
+    static void DefaultConflictTests(Window window)
+    {
+        var keys = new KeyGesture(Key.F8, ModifierKeys.Control | ModifierKeys.Alt);
+        var first = Commands.Register(new("collision/first", "First default", "Collision fixture", () => { }, () => true, keys));
+        var second = Commands.Register(new("collision/second", "Second default", "Collision fixture", () => { }, () => true, keys));
+        var engine = ModControls.Bindings;
+        var empty = new BindingSettings(new());
+        engine.Apply(empty);
+        Check(engine.Display(first.Definition.Id, empty.Overrides) == "" && engine.Display(second.Definition.Id, empty.Overrides) == "", "Competing mod defaults both stay inactive");
+        Check(engine.DefaultConflicts(empty.Overrides).Count(c => c.CommandId.StartsWith("collision/")) == 2, "Default conflicts exposed through Core for any editor");
+        Check(!window.InputBindings.OfType<KeyBinding>().Any(b => b.Command == first.Command || b.Command == second.Command), "Colliding defaults never create load-order winners");
+        var explicitChoice = new BindingSettings(new() { [first.Definition.Id] = "Ctrl+Alt+F8" }); engine.Apply(explicitChoice);
+        Check(engine.Display(first.Definition.Id, explicitChoice.Overrides) == "Ctrl+Alt+F8" && engine.Display(second.Definition.Id, explicitChoice.Overrides) == "", "Saved user assignment wins over another mod's default");
+        var invalid = new BindingSettings(new() { [first.Definition.Id] = "Ctrl+Alt+F8", [second.Definition.Id] = "Ctrl+Alt+F8" });
+        Reject(() => engine.Apply(invalid), "Two explicit assignments still require resolution");
+        Check(window.InputBindings.OfType<KeyBinding>().Any(b => b.Command == first.Command), "Invalid explicit bindings leave prior dispatch intact");
+        var plan = engine.Prepare(first.Definition.Id, null, new());
+        Check(plan.Conflicts.Any(n => n.Contains("Second default")) && plan.Overrides[second.Definition.Id] == "", "Reset can review and claim an inactive default explicitly");
+        engine.Apply(new(plan.Overrides, plan.EditorOverrides));
+        Check(engine.Display(first.Definition.Id, plan.Overrides) == "Ctrl+Alt+F8", "Approved reset activates one winner");
+        var native = new RoutedUICommand("Native collision", "NativeCollision", typeof(Program), new InputGestureCollection { keys });
+        window.CommandBindings.Add(new(native, (_, _) => { }, (_, e) => e.CanExecute = true)); Commands.DiscoverNative(window);
+        engine.Apply(empty);
+        Check(native.InputGestures.Count == 1 && engine.Display(first.Definition.Id, empty.Overrides) == "", "Native keys are preserved when a mod requests them by default");
+        var menu = (Menu)window.FindName("mainMenu"); menu.Items.Add(new MenuItem { Header = "_File" });
+        var access = Commands.Register(new("collision/menu", "Menu collision", "Fixture", () => { }, () => true, new(Key.F, ModifierKeys.Alt)));
+        Check(engine.DefaultConflicts(new()).Any(c => c.CommandId == access.Definition.Id && c.Owners.Any(n => n.Contains("menu access"))), "Native menu access keys participate in default conflict detection");
+        engine.Apply(empty);
     }
     static void MenuHintTests(Window window)
     {

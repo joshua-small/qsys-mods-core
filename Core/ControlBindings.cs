@@ -34,12 +34,40 @@ public sealed class ControlBindings : IDisposable
         return gesture;
     }
     public static string Format(KeyGesture? gesture) => ControlGestures.Serialize(gesture);
-    private IEnumerable<KeyGesture> Effective(RegisteredCommand command, Dictionary<string, string> overrides)
+    private IEnumerable<KeyGesture> RawEffective(RegisteredCommand command, Dictionary<string, string> overrides)
     {
         if (overrides.TryGetValue(command.Definition.Id, out var text)) return ControlGestures.ParseList(text);
         if (command.Definition.Native is { } native) return originals.TryGetValue(native, out var saved) ? saved.OfType<KeyGesture>() : native.InputGestures.OfType<KeyGesture>();
         return command.Definition.DefaultGesture is { } value ? new[] { value } : Array.Empty<KeyGesture>();
     }
+    private IEnumerable<KeyGesture> Effective(RegisteredCommand command, Dictionary<string, string> overrides)
+    {
+        var keys = RawEffective(command, overrides);
+        if (command.Definition.Native is not null || overrides.ContainsKey(command.Definition.Id)) return keys;
+        return keys.Where(key => DefaultConflictNames(command, key, overrides).Length == 0);
+    }
+    private string[] DefaultConflictNames(RegisteredCommand command, KeyGesture key, Dictionary<string, string> overrides)
+    {
+        var names = Commands.All.Where(c => c != command && Commands.IsAvailable(c)
+            && RawEffective(c, overrides).Any(g => ControlGestures.Same(g, key))).Select(c => c.Definition.Name).ToList();
+        names.AddRange(OriginalInputs(command.Definition.AllowInText).Where(b => b.Key == key.Key && b.Modifiers == key.Modifiers
+            && !ReferenceEquals(b.Command, command.Command)
+            && !Commands.All.Any(c => c.Definition.Native is { } native && ReferenceEquals(native, b.Command) && overrides.ContainsKey(c.Definition.Id)))
+            .Select(_ => "Native/editor input binding"));
+        if (key.Modifiers == ModifierKeys.Alt && window.FindName("mainMenu") is ItemsControl menu)
+            foreach (var item in menu.Items.OfType<MenuItem>())
+            {
+                var label = item.Header as string ?? ""; int index = label.IndexOf('_');
+                if (index >= 0 && index + 1 < label.Length && Enum.TryParse<Key>(label[(index + 1)..(index + 2)].ToUpperInvariant(), out var access) && access == key.Key)
+                    names.Add(label.Replace("_", "") + " menu access key");
+            }
+        return names.Distinct().ToArray();
+    }
+    /// <summary>Defaults which Core leaves inactive. Editors can explain these without becoming a binding engine.</summary>
+    public IReadOnlyList<DefaultShortcutConflict> DefaultConflicts(Dictionary<string, string> overrides) => Commands.All
+        .Where(c => Commands.IsAvailable(c) && c.Definition.Native is null && !overrides.ContainsKey(c.Definition.Id))
+        .SelectMany(c => RawEffective(c, overrides).Select(g => new DefaultShortcutConflict(c.Definition.Id, Format(g), DefaultConflictNames(c, g, overrides))))
+        .Where(c => c.Owners.Length > 0).ToArray();
     public string Display(string id, Dictionary<string, string> overrides) => ControlGestures.Join(Effective(Commands.All.Single(c => c.Definition.Id == id), overrides));
     public string Input(string id, Dictionary<string, string> overrides) =>
         Format(Effective(Commands.All.Single(c => c.Definition.Id == id), overrides).FirstOrDefault());
@@ -75,9 +103,9 @@ public sealed class ControlBindings : IDisposable
     public BindingChange Prepare(IReadOnlyDictionary<string, string?> requests, Dictionary<string, string> draft, Dictionary<string, string>? editorOverrides = null)
     {
         var desired = requests.ToDictionary(p => p.Key, p => p.Value is null
-            ? Effective(Commands.All.Single(c => c.Definition.Id == p.Key), new()).ToArray() : ControlGestures.ParseList(p.Value));
+            ? RawEffective(Commands.All.Single(c => c.Definition.Id == p.Key), new()).ToArray() : ControlGestures.ParseList(p.Value));
         var change = BindingChanges.Prepare(draft, requests, desired, Commands.All.Where(Commands.IsAvailable).Select(c =>
-            new BindingAssignment(c.Definition.Id, c.Definition.Name, Effective(c, draft).ToArray())), editorOverrides);
+            new BindingAssignment(c.Definition.Id, c.Definition.Name, RawEffective(c, draft).ToArray())), editorOverrides);
         var names = new List<string>(change.Conflicts);
         foreach (var pair in desired)
         {

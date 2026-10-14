@@ -23,6 +23,7 @@ public sealed record ControlProposal(string Id, string ProviderId, string Provid
 }
 public sealed record BindingAssignment(string Id, string Name, KeyGesture[] Gestures);
 public sealed record BindingChange(Dictionary<string, string> Overrides, string[] Conflicts, Dictionary<string, string> EditorOverrides);
+public sealed record DefaultShortcutConflict(string CommandId, string Gesture, string[] Owners);
 public sealed record ControlChange(ControlSettings Settings, string[] Conflicts);
 
 public static class BindingChanges
