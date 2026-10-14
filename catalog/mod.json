@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "mods-core",
+  "name": "Q-SYS Mods Core",
+  "description": "Shared Preferences, command registration, host compatibility checks, and theme integration for Q-SYS Designer mods.",
+  "author": "joshua-small",
+  "helpUrl": "https://github.com/joshua-small/qsys-mods-core",
+  "thumbnail": "catalog/artwork/avitex.ico"
+}
