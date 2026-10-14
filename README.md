@@ -19,7 +19,7 @@ Reference `Core/Qmm.Shared.ModsCore.csproj` while developing, and ship a depende
 - Derive the native loader from `ModModule` and call `Mods.Register(id, initialize)`. Initialization waits for native commands and isolates individual mod failures. Loader-only menu entries are hidden.
 - Register stable command IDs with `Commands.Register(new ModCommand(...))`. A command has a name, group, action, availability predicate, optional default gesture, and optional menu entry. Duplicate IDs fail. Menus work without Better Shortcuts. Native adapters keep Q-SYS's routed `CanExecute` behavior.
 - Register a typed page with `Preferences.Register`. Its editor returns a view and a reader; validation must not mutate live settings. The returned `ModSettings<T>.Changed` event fires after a successful save. Consumers must unsubscribe when their windows close.
-- Use `Host.Theme(window)` for live host styles and `Host.Receipt` for best-effort local diagnostics. `HostSelection` contains the extracted, version-scoped selection/geometry helpers.
+- Use `Host.Theme(window)` for live host styles and `Host.Receipt` for best-effort local diagnostics. Editing operations use `Host.RequiredReceipt` before their first mutation so a write failure stops the operation. `HostSelection` contains the extracted, version-scoped selection/geometry helpers.
 
 The integration attaches pages to the observed native Preferences tab control and prefixes its OK handler through Harmony. These are version-scoped implementation contracts, not supported Q-SYS SDK interfaces.
 

@@ -66,8 +66,17 @@ public sealed class Probe : IDesignerModule
                 var app=Host.Type("QSC.QSys.App").GetField("AppInfo",Host.Static)!.GetValue(null)!;
                 Require(Host.Property(app,"IsDevelopmentMode") is false,"The mod flag enabled native development mode.");
                 Commands.All.Single(c=>c.Definition.Id=="schematic-tools/selection").Definition.Execute(); await Idle();
-                Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="Schematic Tools — Selection Diagnostics").Close();
-                File.WriteAllText(Path.Combine(config.OutputDirectory,"result.json"),JsonSerializer.Serialize(new { success=true, customDeveloperFlag=true, nativeDevelopmentMode=false, diagnosticsOpened=true })); return;
+                var diagnostics = Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="Schematic Tools — Selection Diagnostics");
+                var move = Preferences.Logical(diagnostics).OfType<Button>().Single(b=>Equals(b.Content,"Debug: Move selection down 20"));
+                move.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Require(Preferences.Logical(diagnostics).OfType<TextBox>().Single().Text.StartsWith("No unlocked objects selected."), "Blank selection did not safely skip the debug mutation.");
+                var blockedDirectory = Path.Combine(Host.SettingsDirectory,"diagnostics","receipt-check");
+                File.WriteAllText(blockedDirectory,"Deliberately blocks a diagnostic directory in the isolated lab.");
+                bool requiredFailed = false;
+                try { Host.RequiredReceipt("receipt-check","before-mutation",new { }); } catch(IOException) { requiredFailed=true; }
+                Require(requiredFailed && Host.Receipt("receipt-check","best-effort",new { }) == "", "Required receipt failure was swallowed.");
+                diagnostics.Close();
+                File.WriteAllText(Path.Combine(config.OutputDirectory,"result.json"),JsonSerializer.Serialize(new { success=true, customDeveloperFlag=true, nativeDevelopmentMode=false, diagnosticsOpened=true, debugEmptySelection=true, requiredReceiptFailure=true })); return;
             }
             Require(Commands.All.Any(c => c.Definition.Id == "better-packing/window") && Commands.All.Any(c => c.Definition.Id == "named-signal-colors/window"), "Independent operation commands missing.");
             Require(Commands.All.Any(c => c.Definition.Id == "better-shortcuts/all-sidebars"), "Shortcut mod missing.");
