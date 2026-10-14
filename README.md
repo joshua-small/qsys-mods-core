@@ -40,4 +40,6 @@ Eight settings-store checks cover defaults, preservation, stale saves, backups, 
 
 The driver accepts both the original Better Shortcuts list and its four-column table. For the table it also checks column names, reference rows with assignment disabled, keybinding search, and an empty search result. These table assertions are prepared for [Better Shortcuts #2](https://github.com/joshua-small/qsys-better-shortcuts/issues/2); compiling the driver does not establish that they have run successfully in Designer.
 
+For recorder-based editors, the conflict/remap checks call the recorder's Begin/Capture path and verify its candidate before Assign; older editors retain the text-field fallback. This is programmatic recorder coverage, not physical key-delivery evidence. The updated driver is compiled only; the owner is conducting Designer testing.
+
 The split and release sequencing are tracked in [Schematic Tools #4](https://github.com/joshua-small/qsys-schematic-tools/issues/4) and [Mod Manager #18](https://github.com/joshua-small/qsys-mod-manager/issues/18). No stable split release is implied by this source branch.
