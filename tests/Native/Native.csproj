@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><EnableWindowsTargeting>true</EnableWindowsTargeting><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>Designer.Modules.ModsLabProbe</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../Core/Qmm.Shared.ModsCore.csproj" />
+    <Reference Include="ModuleCommon"><HintPath>$(DesignerDir)/ModuleCommon.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
