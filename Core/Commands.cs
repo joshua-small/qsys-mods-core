@@ -20,6 +20,7 @@ public static class Commands
     private static readonly Dictionary<string, RegisteredCommand> commands = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, string> providers = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, (string Target, string Provider)> nativeAliases = new(StringComparer.Ordinal);
+    private static readonly Dictionary<MenuItem, HashSet<string>> menuHints = new();
     private static readonly List<(CommandBinding Binding, MenuItem? Menu)> installed = new();
     private static Window? window;
     public static IReadOnlyCollection<RegisteredCommand> All => commands.Values;
@@ -45,6 +46,19 @@ public static class Commands
     internal static IReadOnlyDictionary<string, string> NativeAliases => nativeAliases
         .Where(p => Mods.IsReady(p.Value.Provider) && commands.ContainsKey(p.Value.Target))
         .ToDictionary(p => p.Key, p => p.Value.Target, StringComparer.Ordinal);
+    /// <summary>Show this mod action's current keys beside an existing host menu item.
+    /// The menu's command, click handlers and availability are left intact.</summary>
+    public static void RegisterMenuHint(MenuItem item, string commandId)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (Mods.InitializingId is not { } provider || !commands.ContainsKey(commandId) || ProviderId(commandId) != provider)
+            throw new ArgumentException("Menu hints must refer to an action owned by the initializing mod.");
+        if (!menuHints.TryGetValue(item, out var ids)) menuHints.Add(item, ids = new(StringComparer.Ordinal));
+        ids.Add(commandId);
+    }
+    internal static IEnumerable<RegisteredCommand> MenuCommands(MenuItem item) => commands.Values.Where(c => IsAvailable(c)
+        && (ReferenceEquals(c.Command, item.Command) || (c.Definition.Native is { } native && ReferenceEquals(native, item.Command))
+            || (menuHints.TryGetValue(item, out var ids) && ids.Contains(c.Definition.Id))));
     internal static void Initialize(Window target)
     {
         if (window is not null) return;
@@ -53,7 +67,7 @@ public static class Commands
         target.Closed += (_, _) =>
         {
             foreach (var item in installed) { target.CommandBindings.Remove(item.Binding); if (item.Menu?.Parent is ItemsControl parent) parent.Items.Remove(item.Menu); }
-            installed.Clear(); window = null;
+            installed.Clear(); menuHints.Clear(); window = null;
         };
     }
     private static void Attach(RegisteredCommand entry)

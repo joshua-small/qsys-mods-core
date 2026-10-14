@@ -161,9 +161,10 @@ public sealed class ControlBindings : IDisposable
         foreach (var weak in scopes.ToArray()) if (weak.TryGetTarget(out var scope)) BindFloating(scope);
         foreach (var item in Menus((ItemsControl)window.FindName("mainMenu")))
         {
-            var entry = Commands.All.FirstOrDefault(c => ReferenceEquals(c.Command, item.Command) || ReferenceEquals(c.Definition.Native, item.Command));
-            if (entry is null || (entry.Definition.Native is not null && !settings.Overrides.ContainsKey(entry.Definition.Id))) continue;
-            hints.Add((item,item.InputGestureText)); item.InputGestureText = Display(entry.Definition.Id, settings.Overrides);
+            var entries = Commands.MenuCommands(item).ToArray();
+            if (!entries.Any(c => c.Definition.Native is null || settings.Overrides.ContainsKey(c.Definition.Id))) continue;
+            hints.Add((item,item.InputGestureText));
+            item.InputGestureText = ControlGestures.MenuText(entries.SelectMany(c => Effective(c, settings.Overrides)));
         }
         CommandManager.InvalidateRequerySuggested();
     }
