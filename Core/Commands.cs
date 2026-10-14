@@ -19,19 +19,32 @@ public static class Commands
 {
     private static readonly Dictionary<string, RegisteredCommand> commands = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, string> providers = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, (string Target, string Provider)> nativeAliases = new(StringComparer.Ordinal);
     private static readonly List<(CommandBinding Binding, MenuItem? Menu)> installed = new();
     private static Window? window;
     public static IReadOnlyCollection<RegisteredCommand> All => commands.Values;
     public static event Action? Changed;
     public static RegisteredCommand Register(ModCommand definition)
     {
-        if (string.IsNullOrWhiteSpace(definition.Id) || commands.ContainsKey(definition.Id)) throw new InvalidOperationException("Duplicate or empty command ID: " + definition.Id);
+        if (string.IsNullOrWhiteSpace(definition.Id) || commands.ContainsKey(definition.Id) || nativeAliases.ContainsKey(definition.Id)) throw new InvalidOperationException("Duplicate or empty command ID: " + definition.Id);
         var command = new RegisteredCommand(definition, new RoutedUICommand(definition.Name, definition.Id, typeof(Commands)));
         commands.Add(definition.Id, command);
         if (definition.Native is null && Mods.InitializingId is { } provider) providers.Add(definition.Id, provider);
         if (window is not null) Attach(command);
         Changed?.Invoke(); return command;
     }
+    /// <summary>Retire an old mod action in favor of one native action and its current provider.
+    /// Saved keys migrate on load; this does not create a second bindable command.</summary>
+    public static void RegisterNativeAlias(string oldId, RoutedCommand native)
+    {
+        if (Mods.InitializingId is not { } provider || !oldId.StartsWith(provider + "/", StringComparison.Ordinal)
+            || oldId.Length <= provider.Length + 1 || native.OwnerType == typeof(Commands)
+            || commands.ContainsKey(oldId) || !nativeAliases.TryAdd(oldId, (NativeId(native), provider)))
+            throw new ArgumentException("Invalid or duplicate native command alias.");
+    }
+    internal static IReadOnlyDictionary<string, string> NativeAliases => nativeAliases
+        .Where(p => Mods.IsReady(p.Value.Provider) && commands.ContainsKey(p.Value.Target))
+        .ToDictionary(p => p.Key, p => p.Value.Target, StringComparer.Ordinal);
     internal static void Initialize(Window target)
     {
         if (window is not null) return;

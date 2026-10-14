@@ -84,7 +84,7 @@ public static class ModControls
             store.Read("better-shortcuts", () => new BindingSettings(new())), new(), new()));
         if (value.Bindings?.Overrides is null || value.Decisions is null || value.Notified is null || value.ReplacementGroups is null)
             throw new ArgumentException("Invalid shared control preferences. The original file was preserved.");
-        var next = value.Copy();
+        var next = value.Copy() with { Bindings = Bindings.MigrateAliases(value.Bindings) };
         foreach (var pair in legacy.Where(p => !next.Decisions.ContainsKey(p.Key)))
         {
             var proposal = proposals[pair.Key];
