@@ -6,6 +6,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Media;
+using System.Xml.Linq;
+using System.Xml.Serialization;
 
 namespace QsysMods.Core;
 
@@ -108,7 +110,7 @@ internal sealed class NativePreferences
         var general = PrepareGeneral((JsonObject)value["general"]!);
         var links = PrepareLinks((JsonArray)value["hardLinks"]!);
         previousGeneral = General(); previousLinks = Links.Cast<object>().ToArray();
-        if (!SettingsJson.Same(before["general"], value["general"])) { generalAttempted = true; Host.Call(general, "Save"); }
+        if (!SettingsJson.Same(before["general"], value["general"])) { generalAttempted = true; Host.Call(general, "Save"); VerifyGeneral(); }
         if (!SettingsJson.Same(before["hardLinks"], value["hardLinks"]))
         {
             // No Preferences window is open while syncing, so its collection
@@ -121,12 +123,13 @@ internal sealed class NativePreferences
             var saved = JsonNode.Parse(File.ReadAllText(path))?["Links"] as JsonArray ?? throw new IOException("Hard Links did not save.");
             var projection = new JsonArray(saved.Select(n => (JsonNode)new JsonObject { ["Name"] = n!["Name"]?.DeepClone(), ["IpAddress"] = n["IpAddress"]?.DeepClone(), ["IsEnabled"] = n["IsEnabled"]?.DeepClone() }).ToArray());
             if (!SettingsJson.Same(projection, value["hardLinks"])) throw new IOException("Hard Links did not retain the requested values.");
+            VerifyLinkNames(links);
         }
     }
     public void Restore()
     {
         var errors = new List<Exception>();
-        if (generalAttempted) try { Host.Call(previousGeneral!, "Save"); } catch (Exception ex) { errors.Add(ex); }
+        if (generalAttempted) try { Host.Call(previousGeneral!, "Save"); VerifyGeneral(); } catch (Exception ex) { errors.Add(ex); }
         if (linksAttempted) try
         {
             var collection = Links; collection.Clear(); foreach (var link in previousLinks) collection.Add(link);
@@ -135,9 +138,41 @@ internal sealed class NativePreferences
             var saved = JsonNode.Parse(File.ReadAllText(path))?["Links"] as JsonArray;
             var expected = JsonSerializer.SerializeToNode(previousLinks);
             if (!SettingsJson.Same(saved, expected)) throw new IOException("Hard Links recovery could not be verified.");
+            VerifyLinkNames(previousLinks);
         }
         catch (Exception ex) { errors.Add(ex); }
         if (errors.Count > 0) throw new AggregateException("Native preferences recovery failed.", errors);
+    }
+    private static void VerifyGeneral()
+    {
+        // SettingsManager catches write failures. Compare its serialized values
+        // with the file without reloading or changing the live native model.
+        var manager = Host.Type("QSC.Common.SettingsManager");
+        var data = manager.GetField("data", Host.Static)!.GetValue(null)!;
+        using var writer = new StringWriter(CultureInfo.InvariantCulture);
+        new XmlSerializer(data.GetType()).Serialize(writer, data);
+        var expected = XDocument.Parse(writer.ToString()).Root!.Element("data")!;
+        var path = (string)manager.GetProperty("FileName", Host.Static)!.GetValue(null)!;
+        var saved = XDocument.Load(path).Root?.Element("data") ?? throw new IOException("Native preferences did not save.");
+        string[] keys = ["RecoveryMode", "RecoveryPeriodicHoldoff", "ColorScheme2", "AudioMonitorApi", "AudioMonitorBuffer", "AudioMonitorQuality",
+            "ScriptEditor", "CollectPerformanceData", "ProxyServerEnabled", "ProxyAddress", "AssetDirectory", "DisableNotifications",
+            "DefaultScriptAccess", "TraceWireStyle", "HighlightComponents", "TraceColorAudio", "TraceColorVideo", "TraceColorControl", "TraceColorMediacast", "EnableNewSchematicElements"];
+        foreach (var key in keys)
+        {
+            var entry = expected.Elements().SingleOrDefault(e => (string?)e.Element("key") == key);
+            var actual = saved.Elements().SingleOrDefault(e => (string?)e.Element("key") == key);
+            if (entry is null || !XNode.DeepEquals(entry, actual)) throw new IOException("Native preferences did not retain " + key + ".");
+        }
+    }
+    private void VerifyLinkNames(object[] links)
+    {
+        var expected = new JsonObject();
+        foreach (var link in links)
+            if (Host.Property(link, "Name") is string { Length: > 0 } name)
+                expected[((string)Host.Property(link, "IpAddress")).Trim()] = name;
+        string path = (string)linksType.GetProperty("NamesFileName", Host.Static)!.GetValue(null)!;
+        if (!SettingsJson.Same(JsonNode.Parse(File.ReadAllText(path))?["Names"], expected))
+            throw new IOException("Hard Link names did not retain the requested values.");
     }
     public JsonObject Schema()
     {

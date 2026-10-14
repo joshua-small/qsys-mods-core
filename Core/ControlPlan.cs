@@ -2,14 +2,17 @@ using System.Windows.Input;
 
 namespace QsysMods.Core;
 
-public sealed record BindingSettings(Dictionary<string, string> Overrides, Dictionary<string, string>? EditorOverrides = null);
+public sealed record BindingSettings(Dictionary<string, string> Overrides, Dictionary<string, string>? EditorOverrides = null)
+{
+    public int FormatVersion { get; init; } = 2;
+}
 public sealed record ControlDecision(string Revision, bool Accepted);
 public sealed record ControlSettings(BindingSettings Bindings, Dictionary<string, ControlDecision> Decisions,
     Dictionary<string, string> Notified)
 {
     public Dictionary<string, bool> ReplacementGroups { get; init; } = new();
     public static ControlSettings Empty() => new(new(new()), new(), new());
-    public ControlSettings Copy() => new(new(new(Bindings.Overrides), new(Bindings.EditorOverrides ?? new())), new(Decisions), new(Notified))
+    public ControlSettings Copy() => new(Bindings with { Overrides = new(Bindings.Overrides), EditorOverrides = new(Bindings.EditorOverrides ?? new()) }, new(Decisions), new(Notified))
         { ReplacementGroups = new(ReplacementGroups) };
 }
 

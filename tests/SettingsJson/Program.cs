@@ -46,8 +46,10 @@ using (var sync = new SettingsSynchronizer(path, target))
     File.Delete(path); sync.Poll(); sync.Poll(); Check(sync.Error is not null, "Deletion does not reset native preferences");
     sync.Recreate(); Check(File.Exists(path) && sync.Error is null, "Explicit reopen recreates missing projection");
 }
+File.Delete(Path.Combine(directory, "settings.last-good.json"));
 using (var reopened = new SettingsSynchronizer(path, target))
-{ reopened.Poll(); reopened.Poll(); Check(reopened.Error is null, "Existing settings survive service restart"); }
+{ reopened.Poll(); reopened.Poll(); Check(reopened.Error is null, "Existing settings survive service restart");
+    Check(File.Exists(Path.Combine(directory, "settings.last-good.json")), "Unchanged startup file repairs a missing recovery snapshot"); }
 Reject(() => SettingsJson.Parse("{\"schemaVersion\":1,\"schemaVersion\":1}"), "Duplicate keys rejected");
 Reject(() => SettingsJson.Parse("{\"schemaVersion\":1,\"SchemaVersion\":1}"), "Case duplicate keys rejected");
 Reject(() => SettingsJson.Parse("[]"), "Non-object documents rejected");

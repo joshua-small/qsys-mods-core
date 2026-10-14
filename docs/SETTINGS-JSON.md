@@ -1,8 +1,8 @@
 # Live settings.json interface
 
 This source candidate adds live settings for the hash-guarded Designer 10.5.0.0
-host. It is not a public Q-SYS API. Designer acceptance and release remain
-separate from the offline checks below.
+host. It is not a public Q-SYS API. Offline checks and scoped Designer acceptance
+are recorded below; release remains a separate step.
 
 Open **Tools > Q-SYS Mods > Open Settings JSON…**. The default file is
 `%LOCALAPPDATA%\QsysMods\Designer-10.5\settings.json`; lab hosts use their
@@ -125,12 +125,42 @@ runs production registration and adapters with fake native persistence, includin
 schema references, notifications, native swallowed save errors and stale-save
 recovery. Existing settings-store and WPF controls checks also pass.
 
-These are offline checks; no current-user preferences were changed. Before
-release, exercise valid/invalid external saves, native Preferences round trips,
-theme/audio/tracing/Hard Links behavior, simultaneous edits, recovery/reopen and
-a second process in a disposable Designer. The concurrently developed chord API
-in Core #4 must retain the default-conflict policy when branches integrate.
+The branch incorporates chord commit `3ac0ea4`: legacy gestures, declared native
+defaults and chords use the same conflict policy, including prefix collisions.
+Explicit unresolved conflicts in JSON reject the entire edit before side effects.
 
-On 2026-10-14, the Release loader/runtime build completed with zero warnings or
-errors. Results: 36 live-file checks, 32 Windows settings-bridge checks, 134
-Windows WPF controls checks and 8 existing settings-store checks passed.
+31 checks in disposable Designer 10.5 on 2026-10-14 use the guarded fixtures in
+[`tests/LiveSettings`](../tests/LiveSettings/README.md). It covers native/mod JSON
+application, Preferences pause/resume and reverse projection, malformed and invalid
+edits, duplicate and prefix conflicts, default suppression, user precedence,
+reviewed overwrite and chord remapping. The actual Better Shortcuts page verifies
+conflict ownership, Cancel, staged overwrite, recorder candidates, OK and menu/JSON
+updates. Those recorder checks call its methods in the real Designer process;
+they are distinct from physical keyboard checks.
+
+The first native fault injection found that General Save swallowed an I/O error
+and left only the in-memory value changed. Core now verifies persisted General
+values and both Hard Link files before acceptance, and verifies compensating
+recovery. Locking Prefs.xml or the Hard Link names sidecar now rejects the edit,
+restores prior live values, and preserves last-good recovery. Clearing a Hard Link
+name survives native reload. An unchanged startup file also repairs a missing
+recovery snapshot.
+
+Physical keyboard input verified exactly-once dispatch after explicit conflict
+transfer, the waiting overlay, and a chord remapped through JSON. Restarting with
+Better Shortcuts absent preserved native theme/audio-buffer/trace-color values,
+mod settings and Core-owned binding state. Physical single-key and two-stroke
+dispatch also passed in that Core-only session, each executing its owner once.
+Source/fixture
+details and scoped receipts are described in the live-test guide. Personal native
+and mod preference files are hash-checked independently of the disposable profile.
+The live bridge refuses to initialize in a marked lab whose native roaming/local
+preference paths still point outside the disposable application directory.
+
+Release builds complete with zero warnings/errors. Offline checks: 37 live-file,
+36 Windows bridge, 165 Windows WPF controls and 8 existing store checks. This is
+source and scoped application acceptance, not a release or installation into the
+regular Designer. Audio-engine/hardware behavior, every General setting, all
+editor/floating/UCI scopes, and a competing live process remain outside this
+acceptance. Simultaneous edits, lease contention and recovery failure have offline
+coverage. Recovery across native stores is compensating, not crash atomic.

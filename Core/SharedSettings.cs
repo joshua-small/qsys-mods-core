@@ -29,6 +29,9 @@ public static class SharedSettings
         Commands.Register(new("mods-core/settings-json-retry", "Retry Settings JSON", "Q-SYS Mods Core", Retry, () => synchronizer is not null && Error is not null, InMenu: true));
         try
         {
+            if (Host.IsLab && new[] { Environment.SpecialFolder.ApplicationData, Environment.SpecialFolder.LocalApplicationData }
+                .Any(folder => !Environment.GetFolderPath(folder).StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("Native Q-SYS preferences are not isolated in this lab. Start the disposable copy with native profile redirection before using live settings.");
             var target = new SharedSettingsTarget();
             synchronizer = new(PathName, target);
             var schemaPath = Path.Combine(Host.SettingsDirectory, "settings.schema.json");

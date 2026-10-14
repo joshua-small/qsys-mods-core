@@ -56,6 +56,12 @@ static class Program
         Reject(() => target.Apply(edit), "Native swallowed save error is detected by persisted readback"); FakeLinks.Fail = false;
         target.Restore(initial); // Restore the last attempt's actual native snapshot.
         Check(FakeLinks.Links[0].Name == "Test", "Native rollback retains the prior links");
+        FakeLinks.FailNames = true; edit["qsys"]!["hardLinks"]![0]!["Name"] = "";
+        Reject(() => target.Apply(edit), "Hard Link name sidecar failure is detected"); FakeLinks.FailNames = false;
+        target.Restore(initial); Check(FakeLinks.Links[0].Name == "Test", "Hard Link name sidecar failure restores prior values");
+        FakeGeneral.Fail = true; var failedGeneral = target.Capture(); failedGeneral["qsys"]!["general"]!["AudioBuffer"] = 123;
+        Reject(() => target.Apply(failedGeneral), "Swallowed General save error is detected"); FakeGeneral.Fail = false;
+        target.Restore(initial); Check(FakeGeneral.Saved.AudioBuffer == 100, "General save failure restores prior values");
         var latest = target.Capture();
         var concurrent = (JsonObject)latest.DeepClone(); concurrent["qsys"]!["general"]!["Theme"] = "Light";
         concurrent["mods"]!["example-mod"]!["Gap"] = 66;
