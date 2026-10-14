@@ -23,7 +23,7 @@ internal static class ControlReview
         var keep = new Button { Content = "Keep current", Padding = new Thickness(10, 5, 10, 5) };
         actions.Children.Add(apply); actions.Children.Add(all); actions.Children.Add(keep);
         var checks = new Dictionary<string, CheckBox>();
-        var displayed = ModControls.Proposals.Where(p => only is null || only.Contains(p.Id)).ToArray();
+        var displayed = ModControls.ReviewProposals.Where(p => only is null || only.Contains(p.Id)).ToArray();
         ControlChange? pending = null;
         void ResetWarning() { pending = null; apply.Content = "Apply selected"; message.Text = applied is null ? "Changes are staged until Preferences OK. Cancel discards them." : "Review your choices, then apply them together."; }
         void Populate()
