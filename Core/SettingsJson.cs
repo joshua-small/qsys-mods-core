@@ -157,6 +157,7 @@ public sealed class SettingsSynchronizer : IDisposable
                         throw new InvalidOperationException("Settings were not applied; the previous values were restored. " + failure.GetBaseException().Message, failure);
                     }
                 }
+                else SaveGood(live); // Also repair recovery for an unchanged startup file.
                 baseline = target.Capture(); acceptedText = text; pending = false;
                 SetError(null); Changed?.Invoke();
             }
@@ -178,7 +179,7 @@ public sealed class SettingsSynchronizer : IDisposable
     {
         if (File.Exists(path)) return;
         var live = target.Capture(); var text = SettingsJson.Text(live);
-        SettingsJson.Write(path, text, null); baseline = live; acceptedText = text; pending = false; rejected = false; SetError(null);
+        SettingsJson.Write(path, text, null); SaveGood(live); baseline = live; acceptedText = text; pending = false; rejected = false; SetError(null);
     }
     private void SaveGood(JsonObject document)
     {

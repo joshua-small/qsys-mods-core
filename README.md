@@ -18,10 +18,11 @@ This source branch also provides a [live settings.json interface](docs/SETTINGS-
 for native General/Hard Links preferences, registered mod preferences and shared
 controls. **Tools > Q-SYS Mods > Open Settings JSON…** opens it in the associated
 editor. Core validates saves, retains last-good recovery, and projects native
-Preferences changes back. Its new application integration has not yet been
-accepted in Designer; existing historical validation below does not cover it.
+Preferences changes back. It is integrated with the chord engine and has scoped
+disposable-Designer validation, including native write-failure recovery; see the
+contract for exact checks and remaining limits.
 
-Core 0.1.4 provides feature-owned, all-or-none native-action replacements and atomic bulk key overwrite. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. Retired duplicate mod actions can alias their native action, migrating saved keys without creating a second row. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and validation](docs/MOD-CONTROLS.md). Use Core/Shortcuts 0.1.4 with Packing 0.1.3; pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
+Core 0.1.5 adds two-stroke chords, contextual defaults, prefix-conflict overwrite, and native/context-menu shortcut labels to the shared controls engine. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. Retired duplicate mod actions can alias their native action, migrating saved keys without creating a second row. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and validation](docs/MOD-CONTROLS.md). Use Core/Shortcuts 0.1.5 with Packing 0.1.3; pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
 
 ## Mod API
 
@@ -29,6 +30,7 @@ Reference `Core/Qmm.Shared.ModsCore.csproj` while developing, and ship a depende
 
 - Derive the native loader from `ModModule` and call `Mods.Register(id, initialize)`. Initialization waits for native commands and isolates individual mod failures. Loader-only menu entries are hidden.
 - Register stable command IDs with `Commands.Register(new ModCommand(...))`. A command has a name, group, action, availability predicate, optional default gesture, and optional menu entry. Duplicate IDs fail. Menus work without Better Shortcuts. Native adapters keep Q-SYS's routed `CanExecute` behavior.
+- Use `DefaultBinding = "Ctrl+Shift+N > Ctrl+Shift+P"` for a chord, or `Commands.RegisterDefaultBinding` to supply keys for an existing native action. Defaults yield to existing user/native assignments without changing the preferences file. `ShortcutContext` gates keyboard execution; `When` describes it. See the [sequence contract](docs/MOD-CONTROLS.md#chords-and-default-bindings-015).
 - During initialization, `Commands.RegisterMenuHint(menuItem, commandId)` links an existing host menu to an action owned by that mod without replacing the menu's command or click handler. Core renders current effective keys, including alternatives and cleared assignments, and restores the original hint when the provider is unavailable. Added menu items using registered commands receive hints automatically. `ControlGestures.MenuText` formats display labels separately from invariant settings serialization.
 - Register a typed page with `Preferences.Register`. Its editor returns a view and a reader; validation must not mutate live settings. The returned `ModSettings<T>.Changed` event fires after a successful save. Consumers must unsubscribe when their windows close.
 - Registered mod defaults that collide with native/user bindings remain inactive; competing mod defaults both remain inactive. `ModControls.Bindings.DefaultConflicts` exposes the reason to editors. Duplicate IDs still fail registration, and colliding explicit assignments still require resolution. See [shortcut ownership](docs/MOD-CONTROLS.md#registration-and-default-conflicts).
@@ -56,3 +58,5 @@ The driver accepts both the original Better Shortcuts list and its four-column t
 For direct-editing recorder pages, the driver opens the shortcut editor, captures a candidate, checks that a conflict offers Overwrite, verifies Cancel preserves the target, and confirms transfer clears the other command before restoring its default. It uses Begin/Capture/Confirm programmatically; older recorder and text-field editors retain their existing paths. These checks do not establish physical double-click or key-delivery acceptance. The updated driver is compiled only. Separate scoped Designer checks of the 0.1.3 Pack-row fix, provider switching and Preferences persistence are recorded in [shared-controls validation](docs/MOD-CONTROLS.md#validation).
 
 The split and release sequencing are tracked in [Schematic Tools #4](https://github.com/joshua-small/qsys-schematic-tools/issues/4) and [Mod Manager #18](https://github.com/joshua-small/qsys-mod-manager/issues/18). No stable split release is implied by this source branch.
+
+Chords are tracked in [Core #4](https://github.com/joshua-small/qsys-mods-core/issues/4). The separate shared settings JSON work is tracked in [Core #5](https://github.com/joshua-small/qsys-mods-core/issues/5); its candidate must be reconciled with this binding engine before release. Mods register commands and conflicts through Core. They do not depend on, or register separately with, Better Shortcuts.

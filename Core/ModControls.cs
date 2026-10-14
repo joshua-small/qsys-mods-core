@@ -65,7 +65,7 @@ public static class ModControls
     {
         if (proposal.IsReplacement) throw new ArgumentException("A shortcut proposal requires a binding.");
         if (!Commands.All.Any(c => c.Definition.Id == proposal.CommandId)) throw new ArgumentException("Register the action before proposing its shortcut.");
-        foreach (var gesture in ControlGestures.ParseList(proposal.Binding!)) ControlBindings.Parse(ControlGestures.Serialize(gesture));
+        foreach (var gesture in ControlSequence.ParseList(proposal.Binding!)) gesture.Validate();
         Register(proposal);
     }
     private static void Register(ControlProposal proposal)
@@ -82,7 +82,7 @@ public static class ModControls
     {
         var value = store.Read(SettingsId, () => new ControlSettings(
             store.Read("better-shortcuts", () => new BindingSettings(new())), new(), new()));
-        if (value.Bindings?.Overrides is null || value.Decisions is null || value.Notified is null || value.ReplacementGroups is null)
+        if (value.Bindings?.Overrides is null || value.Bindings.FormatVersion is < 1 or > 2 || value.Decisions is null || value.Notified is null || value.ReplacementGroups is null)
             throw new ArgumentException("Invalid shared control preferences. The original file was preserved.");
         var next = value.Copy() with { Bindings = Bindings.MigrateAliases(value.Bindings) };
         foreach (var pair in legacy.Where(p => !next.Decisions.ContainsKey(p.Key)))
@@ -157,6 +157,13 @@ public static class ModControls
         string source = def.Native is null ? def.Group : "Q-SYS";
         string when = def.When ?? "Designer decides availability in the focused editor";
         var details = new List<string>();
+        if (Commands.DefaultFor(def.Id) is { } declared)
+        {
+            source = declared.ProviderName + " · Q-SYS action";
+            when = declared.When;
+        }
+        if (!value.Bindings.Overrides.ContainsKey(def.Id) && Bindings.Display(def.Id, value.Bindings.Overrides) != Bindings.DefaultDisplay(def.Id))
+            details.Add("Some default keys are inactive because another command already uses them. Your custom bindings were preserved. Reset this command to review an overwrite.");
         foreach (var item in entries)
         {
             string status = !Mods.IsReady(item.ProviderId) ? Mods.Status(item.ProviderId)
