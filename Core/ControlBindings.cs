@@ -7,7 +7,7 @@ using QsysMods.Core;
 
 namespace QsysMods.Core;
 
-public sealed class ControlBindings : IDisposable
+public sealed partial class ControlBindings : IDisposable
 {
     private readonly Window window;
     private readonly Dictionary<RoutedCommand, InputGesture[]> originals = new();
@@ -23,6 +23,7 @@ public sealed class ControlBindings : IDisposable
         this.window = window;
         chords = new(window, () => resolvedEntries, (entry, target) => Execute(entry, target));
         window.AddHandler(ContextMenuService.ContextMenuOpeningEvent, new ContextMenuEventHandler(ContextOpening), true);
+        InitializePopupHints(this);
         // The native floating Component Controls window has a separate input route.
         EventManager.RegisterClassHandler(Host.Type("QSC.QSys.windows.ComponentInfo"), FrameworkElement.LoadedEvent, new RoutedEventHandler((sender, _) =>
         {
@@ -239,6 +240,7 @@ public sealed class ControlBindings : IDisposable
         // File edits can apply while a context menu stays open. Keep its hint
         // current, while preserving the native text restored when it closes.
         foreach (var menu in contextHints.Keys.ToArray()) RefreshContextMenu(menu);
+        foreach (var popup in popupHints.Keys.ToArray()) RefreshPopupToolbar(popup);
         CommandManager.InvalidateRequerySuggested();
     }
     private void Add(UIElement target, RegisteredCommand entry, ControlSequence sequence)
@@ -346,6 +348,8 @@ public sealed class ControlBindings : IDisposable
     }
     public void Dispose()
     {
+        popupHintsDisposed = true;
+        foreach (var popup in popupHints.Keys.ToArray()) RestorePopupToolbar(popup);
         Restore(); chords.Dispose();
         foreach (var weak in scopes) if (weak.TryGetTarget(out var scope)) PresentationSource.RemoveSourceChangedHandler(scope, ScopeSourceChanged);
         window.RemoveHandler(ContextMenuService.ContextMenuOpeningEvent, new ContextMenuEventHandler(ContextOpening));

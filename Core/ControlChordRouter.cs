@@ -117,6 +117,9 @@ internal sealed class ControlChordRouter : IDisposable
     private void KeyUp(object sender, KeyEventArgs e)
     {
         var key = ControlInput.ActualKey(e);
+        // Escape down may be intercepted before WPF sees it. If its release
+        // reaches this route, do not leave a chord armed.
+        if (key == Key.Escape && state.Waiting) { Cancel(); e.Handled = true; }
         if (held.Remove(key) || (state.Waiting && key is Key.LeftAlt or Key.RightAlt)) e.Handled = true;
     }
     private void Show(Window target)
