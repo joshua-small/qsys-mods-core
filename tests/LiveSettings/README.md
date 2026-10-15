@@ -52,3 +52,42 @@ Retain the result, tested module hashes and personal-file hash comparison locall
 Do not commit copied vendor binaries, native preference files, captures, or builds.
 Stop the disposable process after checks. Application checks do not establish DSP
 or hardware behavior; see [the settings contract](../../docs/SETTINGS-JSON.md).
+
+## Extended acceptance modes
+
+Pass `-Mode acceptance` to round-trip all 20 General fields through JSON and
+native Preferences OK, stage simultaneous native/file edits, explicitly Retry,
+and recreate a missing file without resetting native state. Run `-Mode audio`
+to initialize and stop the native output and decoder for WASAPI, DirectSound and
+WavOut at both supported qualities. This sends no audio payload and uses no Core.
+
+While that isolated owner is running, `-Additional -Mode competing` starts a
+second process against the same lab profile without replacing DLLs or stopping
+the owner. It must refuse the settings lease and have no active synchronizer.
+Check that an external JSON edit still applies in the first process. Do not use
+`-Additional` with `-Fresh`.
+
+`-Mode recovery` uses a test-only Harmony hook to lock the recovery sidecar after
+the baseline snapshot. It checks that a subsequent write/compensation failure
+faults synchronization, preserves the candidate and last-good bytes, and refuses
+missing-file recreation. Restoring last-good does not silently resume a faulted
+session. Restart with `-Mode retained` to verify all native and mod values.
+
+`-Mode contexts` raises WPF key events through actual Designer windows. It checks
+single-key and chord dispatch on the main window, text-input opt-in, the native
+floating Component Controls route and an owned modal Preferences dialog. These
+are application routing tests, not physical key delivery. The floating check
+also covers the control moving to its final presentation source after loading.
+
+Each mode writes `acceptance-<pid>.json`, preserving successes and failures.
+Retained mode additionally writes `context.json` with focus types and execution
+counts (never typed text). For physical tests, use Ctrl+Alt+F9 and Ctrl+Alt+F11
+then P on schematic/UCI canvases and in native text/Monaco. Text must block these
+default commands. Ctrl+Alt+F7 and Ctrl+Alt+F8 then G explicitly opt into text input
+and must each increment their owner once. Detached Actipro script tabs are
+outside Core's attached window scopes; their keys remain ordinary editor input.
+
+Keep Procmon captures and native logs local when investigating personal-file
+writes. Compare exact paths and process IDs, and report timestamp/code-path
+correlation separately from direct writer attribution. Never commit preference
+contents, authentication values or raw native logs.

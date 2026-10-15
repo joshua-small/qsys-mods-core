@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory)][string]$LabDirectory,
     [Parameter(Mandatory)][string]$BuildDirectory,
-    [switch]$Fresh
+    [switch]$Fresh,
+    [switch]$Additional,
+    [ValidateSet('', 'acceptance', 'competing', 'retained', 'audio', 'recovery', 'contexts')][string]$Mode = ''
 )
 $ErrorActionPreference = 'Stop'
 $lab = (Resolve-Path -LiteralPath $LabDirectory).Path.TrimEnd('\')
@@ -18,7 +20,8 @@ $running = Get-CimInstance Win32_Process | Where-Object {
     $_.ExecutablePath -and $_.ExecutablePath.StartsWith($lab+'\', [StringComparison]::OrdinalIgnoreCase) -and
     $_.Name -in @('Q-Sys Designer.exe', 'CefSharp.BrowserSubprocess.exe')
 }
-foreach ($proc in $running) {
+if ($Additional -and ($Fresh -or !$running)) { throw 'Additional requires a running disposable owner and cannot reset its profile.' }
+foreach ($proc in $(if (!$Additional) { $running })) {
     $p = Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue
     if ($p) { Stop-Process -Id $p.Id; $p.WaitForExit() }
 }
@@ -33,7 +36,7 @@ if ($Fresh) {
     }
 }
 New-Item -ItemType Directory -Force -Path "$lab\profile\Temp", "$lab\profile\Documents\QSC\Q-Sys Designer" | Out-Null
-foreach ($artifact in @('ProfileHook\release\ProfileHook.dll', 'Probe\release\Designer.Modules.SettingsLab.dll', 'Qmm.Shared.ModsCore\release\Qmm.mods-core.Runtime.dll', 'Designer.Modules.ModsCore\release\Designer.Modules.ModsCore.dll')) {
+foreach ($artifact in $(if (!$Additional) { @('ProfileHook\release\ProfileHook.dll', 'Probe\release\Designer.Modules.SettingsLab.dll', 'Qmm.Shared.ModsCore\release\Qmm.mods-core.Runtime.dll', 'Designer.Modules.ModsCore\release\Designer.Modules.ModsCore.dll') })) {
     Copy-Item -LiteralPath (Join-Path $build $artifact) -Destination $lab
 }
 $psi = [Diagnostics.ProcessStartInfo]::new("$lab\Q-Sys Designer.exe")
@@ -46,6 +49,7 @@ $psi.Environment['DOTNET_TieredCompilation'] = '0'
 $psi.Environment['COMPlus_JitNoInline'] = '1'
 $psi.Environment['TEMP'] = "$lab\profile\Temp"
 $psi.Environment['TMP'] = "$lab\profile\Temp"
+$psi.Environment['QSYS_SETTINGS_LAB_MODE'] = $Mode
 $p = [Diagnostics.Process]::Start($psi)
 @{ ProcessId = $p.Id; ApplicationDirectory = $lab } | ConvertTo-Json | Set-Content -LiteralPath "$lab\lab-process.json"
 $p.Id

@@ -27,8 +27,16 @@ public sealed class ControlBindings : IDisposable
         EventManager.RegisterClassHandler(Host.Type("QSC.QSys.windows.ComponentInfo"), FrameworkElement.LoadedEvent, new RoutedEventHandler((sender, _) =>
         {
             if (sender is not UIElement element || scopes.Any(s => s.TryGetTarget(out var target) && ReferenceEquals(target, element))) return;
-            scopes.Add(new(element)); BindFloating(element);
+            scopes.Add(new(element));
+            // Actipro can load the control before reparenting it into its final
+            // floating presentation source. Follow that move, including redocking.
+            PresentationSource.AddSourceChangedHandler(element, ScopeSourceChanged);
+            BindFloating(element);
         }), true);
+    }
+    private void ScopeSourceChanged(object sender, SourceChangedEventArgs e)
+    {
+        if (sender is UIElement element && e.NewSource is not null) BindFloating(element);
     }
     public static KeyGesture? Parse(string text)
     {
@@ -309,7 +317,9 @@ public sealed class ControlBindings : IDisposable
         foreach (var (item, text) in originals) item.InputGestureText = text;
         menu.Closed -= ContextClosed;
     }
-    private bool RoutedInPreview(RegisteredCommand command, ControlSequence sequence) => sequence.IsChord || ManagedDefault(command)
+    // Mod keys must use the same text/floating/modal guards as chords. A direct
+    // KeyBinding to the menu command bypasses AllowInText during WPF routing.
+    private bool RoutedInPreview(RegisteredCommand command, ControlSequence sequence) => command.Definition.Native is null || sequence.IsChord || ManagedDefault(command)
         || command.Definition.ShortcutContext is not null || MenuAccessKeys().Any(m => m.Stroke == sequence.First);
     private IEnumerable<(ControlStroke Stroke, string Name)> MenuAccessKeys()
     {
@@ -334,6 +344,7 @@ public sealed class ControlBindings : IDisposable
     public void Dispose()
     {
         Restore(); chords.Dispose();
+        foreach (var weak in scopes) if (weak.TryGetTarget(out var scope)) PresentationSource.RemoveSourceChangedHandler(scope, ScopeSourceChanged);
         window.RemoveHandler(ContextMenuService.ContextMenuOpeningEvent, new ContextMenuEventHandler(ContextOpening));
         foreach (var menu in contextHints.Keys.ToArray()) RestoreContextMenu(menu);
     }

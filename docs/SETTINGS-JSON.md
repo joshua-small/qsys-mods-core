@@ -174,9 +174,50 @@ The live bridge refuses to initialize in a marked lab whose native roaming/local
 preference paths still point outside the disposable application directory.
 
 Release builds complete with zero warnings/errors. Offline checks: 40 live-file,
-38 Windows bridge, 177 Windows WPF controls and 8 existing store checks. This is
-source and scoped application acceptance, not a release or installation into the
-regular Designer. Audio-engine/hardware behavior, every General setting, all
-editor/floating/UCI scopes, and a competing live process remain outside this
-acceptance. Simultaneous edits, lease contention and recovery failure have offline
-coverage. Recovery across native stores is compensating, not crash atomic.
+38 Windows bridge, 178 Windows WPF controls and 8 existing store checks (264 total).
+The extended issue #5 acceptance below completes the shared-settings application
+scope. This is not a release or installation into regular Designer. Recovery
+across native stores remains compensating, not crash atomic.
+
+### Extended acceptance, 2026-10-14/15
+
+The same hash-guarded Designer 10.5 copy passed these additional modes:
+
+| Area | Result |
+| --- | --- |
+| All General fields, simultaneous edits and missing-file recovery | 48 checks: every one of the 20 fields applies from JSON and projects back through native OK; competing native/file values survive a visible conflict until explicit Retry; Recreate preserves running values. |
+| Competing live Designer | Two checks confirm the second process refuses the lease and has no synchronizer; the first owner still accepts an external mod-setting edit while the competitor is open. |
+| Native audio engine | 21 checks initialize/stop output and decoder for WASAPI, DirectSound and WavOut at both qualities, then restore settings. Silence only; no Core connection, audio payload or audible/hardware quality claim. |
+| Recovery failure and restart | Six fault-injection checks preserve edited and last-good files, refuse unsafe recreation, and remain faulted until restart; three retained-profile checks verify native and mod values after restart. |
+| Native window routing | Ten checks exercise single/chord dispatch, text opt-in, native floating Component Controls and modal Preferences through WPF events in Designer. |
+
+Physical input separately passed single-key and chord execution on schematic and
+UCI layout, default exclusion in native text boxes and docked Monaco, and both
+opted-in forms in those text editors. The tests found and fixed two defects:
+single-key mod bindings bypassed text guards, and floating Component Controls
+could move to a new window after its handlers were attached. The final route uses
+the shared guards and follows presentation-source changes. Detached script tabs
+were checked too: they remain outside Core's attached scopes and receive ordinary
+editor input. Physical input to the floating tool window was not attributed as
+passing because the automation helper activates the main window; its acceptance
+is the explicit native routed-event test above. Other Better Shortcuts adapters,
+Packing surfaces and release qualification remain on issues #3/#4.
+
+### Personal Prefs.xml investigation
+
+The prior unexplained write occurred at 2026-10-14 23:56:23.2726045 UTC. The native
+Q-SYS log records a successful Library token refresh at 23:56:23.271 UTC. Static
+inspection of the guarded host shows `MainWindow.AssetLibraryLoggedIn` calling
+`AppInfo.SaveQYSLibraryToken`, which sets `assetRefreshToken` and saves the whole
+native preferences document. The timing and callback strongly support native
+authentication refresh as the cause. The exact old file bytes and a trace of
+that historical write were unavailable, so this is not a proven field diff or
+direct historical PID attribution.
+
+A controlled Procmon capture of the General/concurrent-instance runs records
+252 lab-owner and one lab-competitor Prefs.xml writes, all under the redirected
+lab profile. Neither process accessed the personal Prefs.xml. The regular
+Designer had no Prefs.xml access in that capture. Personal Prefs.xml, both Hard
+Link files and mod preferences remained byte-for-byte unchanged throughout the
+extended acceptance. The regular process and current personal files were
+preserved. Raw logs, credentials, traces and file snapshots stay local.

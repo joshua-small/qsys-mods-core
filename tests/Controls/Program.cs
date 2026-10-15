@@ -105,6 +105,8 @@ internal static partial class Program
         var keys = new KeyGesture(Key.F8, ModifierKeys.Control | ModifierKeys.Alt);
         var first = Commands.Register(new("collision/first", "First default", "Collision fixture", () => { }, () => true, keys));
         var second = Commands.Register(new("collision/second", "Second default", "Collision fixture", () => { }, () => true, keys));
+        var hint = new MenuItem { Command = first.Command };
+        ((MenuItem)window.FindName("mainMenu_Tools")).Items.Add(hint);
         var engine = ModControls.Bindings;
         var empty = new BindingSettings(new());
         engine.Apply(empty);
@@ -115,7 +117,8 @@ internal static partial class Program
         Check(engine.Display(first.Definition.Id, explicitChoice.Overrides) == "Ctrl+Alt+F8" && engine.Display(second.Definition.Id, explicitChoice.Overrides) == "", "Saved user assignment wins over another mod's default");
         var invalid = new BindingSettings(new() { [first.Definition.Id] = "Ctrl+Alt+F8", [second.Definition.Id] = "Ctrl+Alt+F8" });
         Reject(() => engine.Apply(invalid), "Two explicit assignments still require resolution");
-        Check(window.InputBindings.OfType<KeyBinding>().Any(b => b.Command == first.Command), "Invalid explicit bindings leave prior dispatch intact");
+        Check(hint.InputGestureText == "Ctrl+Alt+F8", "Invalid explicit bindings leave the prior live menu assignment intact");
+        Check(!window.InputBindings.OfType<KeyBinding>().Any(b => b.Command == first.Command), "Single mod keys cannot bypass text guards through WPF command bindings");
         var plan = engine.Prepare(first.Definition.Id, null, new());
         Check(plan.Conflicts.Any(n => n.Contains("Second default")) && plan.Overrides[second.Definition.Id] == "", "Reset can review and claim an inactive default explicitly");
         engine.Apply(new(plan.Overrides, plan.EditorOverrides));
@@ -362,7 +365,7 @@ internal static partial class Program
         Check(ModControls.Current.Bindings.Overrides[nativeId] == "Ctrl+Alt+L" && window.InputBindings.Contains(input), "Validation failure preserves current live bindings");
         var failedDefault = Commands.Register(new("addon/default", "Default action", "Addon", () => { }, () => true, new(Key.F10, ModifierKeys.Control)));
         // Default command registration from outside initialization remains supported.
-        Check(window.InputBindings.OfType<KeyBinding>().Any(b => b.Command == failedDefault.Command), "Core installs registered defaults without Better Shortcuts");
+        Check(ModControls.Bindings.Display(failedDefault.Definition.Id, ModControls.Current.Bindings.Overrides) == "Ctrl+F10", "Core resolves registered defaults without Better Shortcuts");
     }
     static BindingChange SinglePlan(Dictionary<string,string> draft, string id, string? value, KeyGesture[] desired, IEnumerable<BindingAssignment> assignments, Dictionary<string,string>? editors = null) =>
         BindingChanges.Prepare(draft, new Dictionary<string,string?> { [id] = value }, new Dictionary<string,KeyGesture[]> { [id] = desired }, assignments, editors);
