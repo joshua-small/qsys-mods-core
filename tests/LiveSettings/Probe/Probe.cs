@@ -63,8 +63,14 @@ public sealed class Probe : ModModule
     private static Window OpenPreferences()
     { var prefs = (Window)Activator.CreateInstance(Host.Type("QSC.QSys.windows.Dialogs.PreferencesDialog"))!; prefs.Owner = Application.Current.MainWindow; prefs.Show(); return prefs; }
     private static void Save(Window prefs) => Preferences.Logical(prefs).OfType<Button>().Single(b => b.IsDefault).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+    private static object? SyncState()
+    {
+        var sync = typeof(SharedSettings).GetField("synchronizer", Host.Static)!.GetValue(null);
+        return sync is null ? null : new { baseline = Host.Field(sync, "baseline"), live = ((ISettingsTarget)Host.Field(sync, "target")).Capture() };
+    }
     private static void Dump() => File.WriteAllText(Path.Combine(Output, "state.json"), JsonSerializer.Serialize(new {
         error = SharedSettings.Error, runs,
+        sync = SyncState(),
         conflicts = ModControls.Bindings.DefaultConflicts(ModControls.Current.Bindings.Overrides),
         bindings = Commands.All.Where(c => c.Definition.Id.StartsWith("settings-lab/")).ToDictionary(c => c.Definition.Id, c => ModControls.Bindings.Display(c.Definition.Id, ModControls.Current.Bindings.Overrides))
     }, new JsonSerializerOptions { WriteIndented = true }));
