@@ -1,6 +1,11 @@
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Schema;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Windows;
 using System.Windows.Controls;
 using HarmonyLib;
@@ -27,6 +32,9 @@ public static class Preferences
     private sealed record Editor(FrameworkElement View, Func<object?> Read, Action<object> Publish);
     private sealed record Session(SettingsStore Store, Dictionary<string, Editor> Editors, ControlDraft Controls);
     private static readonly List<Page> pages = new();
+    internal sealed record Setting(Func<JsonNode> Read, Func<JsonNode, object> Validate, Action<object> Publish, JsonNode Schema);
+    internal static readonly Dictionary<string, Setting> Settings = new(StringComparer.Ordinal);
+    private static readonly JsonSerializerOptions SettingsFormat = new() { TypeInfoResolver = new DefaultJsonTypeInfoResolver(), UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, RespectNullableAnnotations = true, RespectRequiredConstructorParameters = true };
     private static readonly ConditionalWeakTable<Window, Session> sessions = new();
     private static bool installed;
     public static string PathName => Path.Combine(Host.SettingsDirectory, "preferences.json");
@@ -39,6 +47,11 @@ public static class Preferences
         if (pages.Any(p => p.Id == id)) throw new InvalidOperationException("Preferences already registered: " + id);
         var current = new SettingsStore(PathName).Read(id, defaults); validate?.Invoke(current);
         var settings = new ModSettings<T>(current);
+        Settings.Add(id, new(() => JsonSerializer.SerializeToNode(settings.Value, SettingsFormat)!, node =>
+        {
+            var value = node.Deserialize<T>(SettingsFormat) ?? throw new ArgumentException("Empty preferences for " + id);
+            validate?.Invoke(value); return value;
+        }, obj => settings.Update((T)obj), SettingsFormat.GetJsonSchemaAsNode(typeof(T))));
         pages.Add(new(id, name, draft =>
         {
             // Re-read disk for every dialog; opening Preferences never writes a migration.
