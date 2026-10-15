@@ -11,11 +11,21 @@ internal sealed record ChordEntry(RegisteredCommand Command, ControlSequence Seq
 
 public static class ControlInput
 {
-    public static bool IsTextInput()
+    public static bool IsTextInput() => IsTextInput(Keyboard.FocusedElement as DependencyObject);
+    internal static bool IsTextInput(DependencyObject? focused)
     {
-        for (var current = Keyboard.FocusedElement as DependencyObject; current is not null; current = Parent(current))
+        for (var current = focused; current is not null; current = Parent(current))
             if (current is TextBoxBase or PasswordBox || current is ComboBox { IsEditable: true }
-                || current.GetType().FullName?.Contains("WebView", StringComparison.OrdinalIgnoreCase) == true) return true;
+                || current.GetType().FullName?.Contains("WebView", StringComparison.OrdinalIgnoreCase) == true
+                || IsLegacyEditor(current.GetType())) return true;
+        return false;
+    }
+    // Legacy Designer scripts focus EditorView under SyntaxEditor, rather than
+    // TextBoxBase. Match the editor's base type without a vendor assembly dependency.
+    private static bool IsLegacyEditor(Type? type)
+    {
+        for (; type is not null; type = type.BaseType)
+            if (type.FullName == "ActiproSoftware.Windows.Controls.SyntaxEditor.SyntaxEditor") return true;
         return false;
     }
     public static DependencyObject? Parent(DependencyObject current) => current is Visual or System.Windows.Media.Media3D.Visual3D
