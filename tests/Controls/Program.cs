@@ -97,6 +97,7 @@ internal static partial class Program
         AliasTests(native);
         MenuHintTests(window);
         ChordTests(window);
+        EditorTests();
         DefaultConflictTests(window);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
     }
