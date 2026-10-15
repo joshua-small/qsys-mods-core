@@ -181,6 +181,12 @@ across native stores remains compensating, not crash atomic.
 
 ### Extended acceptance, 2026-10-14/15
 
+Later physical editor, native icon-menu and Legacy guard results are tracked in
+[the shared controls acceptance](MOD-CONTROLS.md#validation). Those dated
+follow-ups supersede the pending floating/editor items in the earlier checkpoint
+below. The native component-control clipboard failure remains a separate blocker;
+it is not a live-settings rejection.
+
 The same hash-guarded Designer 10.5 copy passed these additional modes:
 
 | Area | Result |
