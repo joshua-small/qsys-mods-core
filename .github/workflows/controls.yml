@@ -11,3 +11,4 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet run --project tests/Controls --configuration Release --artifacts-path artifacts/controls
+      - run: dotnet run --project tests/SettingsBridge --configuration Release --artifacts-path artifacts/settings-bridge
