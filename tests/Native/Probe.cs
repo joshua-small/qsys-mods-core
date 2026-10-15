@@ -40,6 +40,8 @@ public sealed class Probe : IDesignerModule
     private static Task Idle() => Application.Current.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle).Task;
     private static TabControl Tabs(Window window) => Preferences.Logical(window).OfType<TabControl>().Single();
     private static TabItem Page(Window window, string id) => Tabs(window).Items.OfType<TabItem>().Single(t => Equals(t.Tag, "qsys-mod:" + id));
+    private static Selector Shortcuts(DependencyObject page) => Preferences.Logical(page).OfType<Selector>()
+        .Single(s => s is ListBox || s is DataGrid { Name: "ShortcutTable" });
     private Window OpenPreferences()
     {
         var window = (Window)Activator.CreateInstance(Host.Type("QSC.QSys.windows.Dialogs.PreferencesDialog"))!;
@@ -82,35 +84,86 @@ public sealed class Probe : IDesignerModule
             Require(Commands.All.Any(c => c.Definition.Id == "better-shortcuts/all-sidebars"), "Shortcut mod missing.");
             var originalFile = File.Exists(Preferences.PathName) ? File.ReadAllText(Preferences.PathName) : null;
             prefs = OpenPreferences(); await Idle();
-            Require(Tabs(prefs).Items.OfType<TabItem>().Count(t => t.Tag is string s && s.StartsWith("qsys-mod:")) == 3, "Expected three configured mod pages.");
+            Require(Tabs(prefs).Items.OfType<TabItem>().Count(t => t.Tag is string s && s.StartsWith("qsys-mod:")) == 3, "Expected three feature pages; no empty Mod Controls page.");
             Tabs(prefs).SelectedItem = Page(prefs, "better-packing"); await Idle();
             var gap = Preferences.Logical(Page(prefs, "better-packing")).OfType<TextBox>().Single();
             Require(gap.Text == "20", "Packing default differs."); gap.Text = "37";
+            var disable = Preferences.Logical(Page(prefs, "better-packing")).OfType<CheckBox>().Single();
+            Require(disable.IsChecked == false, "Packing overrides must default on."); disable.IsChecked = true;
             Render(prefs, "preferences-packing"); prefs.Close(); prefs = null; await Idle();
             Require((File.Exists(Preferences.PathName) ? File.ReadAllText(Preferences.PathName) : null) == originalFile, "Cancel wrote preferences."); checks.Add(new { cancelPreservedFile = true });
             prefs = OpenPreferences(); await Idle();
             gap = Preferences.Logical(Page(prefs, "better-packing")).OfType<TextBox>().Single(); Require(gap.Text == "20", "Cancel retained a staged value."); gap.Text = "37";
-            var replace = Preferences.Logical(Page(prefs, "better-packing")).OfType<CheckBox>().Single(); Require(replace.IsChecked == true, "Native packing replacement is not default on."); replace.IsChecked = false;
+            disable = Preferences.Logical(Page(prefs, "better-packing")).OfType<CheckBox>().Single();
+            Require(disable.IsChecked == false, "Cancel retained a staged opt-out."); disable.IsChecked = true;
             Require(Preferences.Logical(Page(prefs, "named-signal-colors")).OfType<CheckBox>().Single().IsChecked == false, "Only default colors must default false.");
             var save = Preferences.Logical(prefs).OfType<Button>().Single(b => b.IsDefault); save.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs = null; await Idle();
             var saved = File.ReadAllText(Preferences.PathName); Require(saved.Contains("37") && saved.Contains("false"), "OK did not persist preferences.");
             prefs = OpenPreferences(); await Idle(); Require(Preferences.Logical(Page(prefs, "better-packing")).OfType<TextBox>().Single().Text == "37", "Saved value did not reopen.");
+            Require(Preferences.Logical(Page(prefs, "better-packing")).OfType<CheckBox>().Single().IsChecked == true, "Saved opt-out did not reopen.");
             Tabs(prefs).SelectedItem = Page(prefs, "better-shortcuts"); await Idle(); Render(prefs, "preferences-shortcuts");
             var shortcutPage = Page(prefs,"better-shortcuts");
-            var list = Preferences.Logical(shortcutPage).OfType<ListBox>().Single();
+            var list = Shortcuts(shortcutPage);
+            if (list is DataGrid table)
+            {
+                Require(table.Columns.Select(c => c.Header.ToString()).SequenceEqual(new[] { "Command", "Keybinding", "When", "Source" }), "Shortcut table columns differ.");
+                Require(table.Items.Cast<object>().Any(c => Host.Property(c,"Id").ToString()=="help/control-position"), "Official gesture reference missing.");
+                table.SelectedItem = table.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="help/control-position");
+                Require(Preferences.Logical(shortcutPage).OfType<Button>().Where(b => b.Content is "Assign" or "Clear" or "Reset" or "Change shortcut").All(b => !b.IsEnabled), "Reference row allows assignment.");
+                var search = Preferences.Logical(shortcutPage).OfType<TextBox>().Single(t => t.Name == "ShortcutSearch");
+                search.Text = "Ctrl+Shift+Backspace";
+                Require(table.Items.Count == 1 && Host.Property(table.Items[0],"Id").ToString()=="help/app-zoom-reset", "Shortcut search did not match the keybinding.");
+                search.Text = "xyz-no-such-shortcut";
+                Require(table.Items.Count == 0, "No-match search is not empty.");
+                search.Clear();
+                checks.Add(new { shortcutTableColumns=true, referenceRowsReadOnly=true, keybindingSearch=true });
+            }
             list.SelectedItem = list.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
-            var gestureBox = Preferences.Logical(shortcutPage).OfType<TextBox>().Last();
+            bool directEditing = Preferences.Logical(shortcutPage).OfType<Button>().Any(b => Equals(b.Content, "Change shortcut"));
+            void RecordGesture(string text)
+            {
+                if (directEditing) Click(shortcutPage, "Change shortcut");
+                var recorder = Preferences.Logical(shortcutPage).OfType<FrameworkElement>().SingleOrDefault(e => e.Name == "ShortcutRecorder");
+                if (recorder is null) { Preferences.Logical(shortcutPage).OfType<TextBox>().Last().Text = text; return; }
+                var gesture = (KeyGesture)new KeyGestureConverter().ConvertFromInvariantString(text)!;
+                recorder.GetType().GetMethod("Begin", Host.Instance)!.Invoke(recorder, null);
+                recorder.GetType().GetMethod("Capture", Host.Instance)!.Invoke(recorder, new object[] { gesture.Key, gesture.Modifiers, false });
+                Require(Host.Property(recorder, "Gesture").ToString() == text, "Recorder did not capture the expected candidate.");
+            }
             void Click(DependencyObject owner, string label) => Preferences.Logical(owner).OfType<Button>().Single(b=>Equals(b.Content,label)).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            gestureBox.Text="Ctrl+Alt+0"; Click(shortcutPage,"Assign");
-            Require(Preferences.Logical(shortcutPage).OfType<TextBlock>().Any(t=>t.Text.Contains("conflicts")),"Duplicate shortcut was not rejected.");
-            gestureBox.Text="Ctrl+Alt+F11"; Click(shortcutPage,"Assign");
+            void ConfirmGesture()
+            {
+                if (!directEditing) { Click(shortcutPage, "Assign"); return; }
+                var recorder = Preferences.Logical(shortcutPage).OfType<FrameworkElement>().Single(e => e.Name == "ShortcutRecorder");
+                recorder.GetType().GetMethod("Confirm", Host.Instance)!.Invoke(recorder, null);
+            }
+            RecordGesture("Ctrl+Alt+0");
+            if (directEditing)
+            {
+                Require(Preferences.Logical(shortcutPage).OfType<Button>().Any(b => Equals(b.Content, "Overwrite") && b.IsEnabled), "Conflict does not offer overwrite.");
+                Click(shortcutPage, "Cancel");
+                Require(Host.Property(list.SelectedItem!, "Keybinding").ToString() == "Ctrl+Alt+D", "Canceled conflict changed the target.");
+                RecordGesture("Ctrl+Alt+0"); ConfirmGesture();
+                Require(Host.Property(list.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="better-shortcuts/all-sidebars"), "Keybinding").ToString()=="Unassigned", "Overwrite did not transfer the conflicting gesture.");
+            }
+            else
+            {
+                ConfirmGesture();
+                Require(Preferences.Logical(shortcutPage).OfType<TextBlock>().Any(t=>t.Text.Contains("conflicts")),"Duplicate shortcut was not rejected.");
+            }
+            RecordGesture("Ctrl+Alt+F11"); ConfirmGesture();
+            if (directEditing)
+            {
+                list.SelectedItem = list.Items.Cast<object>().Single(c => Host.Property(c,"Id").ToString()=="better-shortcuts/all-sidebars");
+                Click(shortcutPage, "Reset");
+            }
             Preferences.Logical(prefs).OfType<Button>().Single(b=>b.IsDefault).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs=null; await Idle();
             Require(main.InputBindings.OfType<KeyBinding>().Any(b=>b.Command is RoutedCommand c && c.Name=="better-shortcuts/dark-mode" && b.Key==Key.F11),"Custom shortcut did not apply.");
             prefs=OpenPreferences(); await Idle(); shortcutPage=Page(prefs,"better-shortcuts");
-            list=Preferences.Logical(shortcutPage).OfType<ListBox>().Single(); list.SelectedItem=list.Items.Cast<object>().Single(c=>Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
+            list=Shortcuts(shortcutPage); list.SelectedItem=list.Items.Cast<object>().Single(c=>Host.Property(c,"Id").ToString()=="better-shortcuts/dark-mode");
             Click(shortcutPage,"Reset"); Preferences.Logical(prefs).OfType<Button>().Single(b=>b.IsDefault).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); prefs=null; await Idle();
             Require(main.InputBindings.OfType<KeyBinding>().Any(b=>b.Command is RoutedCommand c && c.Name=="better-shortcuts/dark-mode" && b.Key==Key.D),"Shortcut reset did not restore the default.");
-            checks.Add(new { shortcutConflictRejected=true, customShortcutSaved=true, resetRestoredDefault=true });
+            checks.Add(new { shortcutConflictOverwrite=directEditing, shortcutConflictRejected=!directEditing, customShortcutSaved=true, resetRestoredDefault=true });
             checks.Add(new { nativePreferencesSaveAndReopen = true, defaultGap = 20, savedGap = 37, replaceDefault = true, onlyDefault = false });
             var registered = Commands.All.ToArray();
             File.WriteAllText(Path.Combine(config.OutputDirectory, "commands.json"), JsonSerializer.Serialize(registered.Select(c => new { c.Definition.Id,c.Definition.Name,c.Definition.Group, gesture = c.Definition.DefaultGesture?.GetDisplayStringForCulture(System.Globalization.CultureInfo.InvariantCulture) }), new JsonSerializerOptions { WriteIndented = true }));

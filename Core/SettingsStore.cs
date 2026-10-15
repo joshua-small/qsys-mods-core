@@ -30,15 +30,22 @@ public sealed class SettingsStore
         ValidateId(id);
         return values.TryGetValue(id, out var saved) ? saved.Deserialize<T>(Json) ?? throw new InvalidDataException("Empty preferences for " + id) : defaults();
     }
+    public bool Contains(string id) => values.ContainsKey(id);
+    public IReadOnlyDictionary<string, JsonElement> Snapshot() => values.ToDictionary(p => p.Key, p => p.Value.Clone(), StringComparer.Ordinal);
     public void Save(IReadOnlyDictionary<string, object> changes)
+    {
+        var next = new Dictionary<string, JsonElement>(values);
+        foreach (var pair in changes) { ValidateId(pair.Key); next[pair.Key] = JsonSerializer.SerializeToElement(pair.Value, pair.Value.GetType(), Json); }
+        SaveValues(next);
+    }
+    internal void Restore(IReadOnlyDictionary<string, JsonElement> snapshot) => SaveValues(new(snapshot));
+    private void SaveValues(Dictionary<string, JsonElement> next)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var ownership = new FileStream(path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         // Refuse to overwrite settings changed by another Designer process/dialog.
         if ((File.Exists(path) ? File.ReadAllText(path) : null) != original)
             throw new IOException("Mod preferences changed in another Designer window. Close and reopen Preferences before saving.");
-        var next = new Dictionary<string, JsonElement>(values);
-        foreach (var pair in changes) { ValidateId(pair.Key); next[pair.Key] = JsonSerializer.SerializeToElement(pair.Value, pair.Value.GetType(), Json); }
         var text = JsonSerializer.Serialize(new Document(1, next), Json);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
