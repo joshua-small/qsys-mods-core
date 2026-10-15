@@ -29,6 +29,10 @@ environment before Chromium children launch. Verify `profile/isolation.json`.
 The probe waits for Core and a usable main window, then writes `live-evidence/result.json`
 and `state.json`. A fresh profile may show Designer's informational startup notice;
 close it normally to let the test run. The probe exercises actual native persistence,
+and includes baseline/live provider snapshots in its local state receipt to diagnose
+a simultaneous-edit rejection instead of mistaking it for the expected test error.
+Keep those snapshots local along with the disposable preferences.
+The probe exercises
 the Preferences dialog and Better Shortcuts controls. It invokes recorder methods
 for deterministic UI-component checks; that does not establish physical recorder
 input. It adds synthetic commands only in this disposable process. Hard Links use
