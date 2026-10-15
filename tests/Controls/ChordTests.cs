@@ -65,9 +65,13 @@ internal static partial class Program
             Check(menu.InputGestureText == "Ctrl+F8 then X", "Native menu follows saved chord remap");
             engine.RefreshContextMenu(context);
             Check(contextItem.InputGestureText == "Ctrl+F8 then X", "Reopened context menu follows remapping");
-            context.RaiseEvent(new RoutedEventArgs(ContextMenu.ClosedEvent));
+            engine.Apply(new(new() { [entry.Definition.Id] = "Ctrl+F8 > Y" }));
+            Check(contextItem.InputGestureText == "Ctrl+F8 then Y", "An open context menu follows live remapping");
             engine.Apply(new(new() { [entry.Definition.Id] = "" }));
             Check(menu.InputGestureText == "", "Clear removes chord hint");
+            Check(contextItem.InputGestureText == "", "Clear removes the open context-menu hint");
+            context.RaiseEvent(new RoutedEventArgs(ContextMenu.ClosedEvent));
+            Check(contextItem.InputGestureText == "original", "Live refresh preserves the original context hint for close");
             Reject(() => engine.Validate(new(new()) { FormatVersion = 3 }), "Future settings format rejected");
             Reject(() => engine.Validate(new(new() { [entry.Definition.Id] = "Ctrl+F8; Ctrl+F8 > X" })), "Own alternative cannot also be own prefix");
         }

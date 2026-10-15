@@ -236,6 +236,9 @@ public sealed class ControlBindings : IDisposable
             item.InputGestureText = string.Join(" or ", entries.SelectMany(c => Effective(c, settings.Overrides)).Distinct().Select(g => g.Label));
         }
         resolvedEntries = Entries().ToArray();
+        // File edits can apply while a context menu stays open. Keep its hint
+        // current, while preserving the native text restored when it closes.
+        foreach (var menu in contextHints.Keys.ToArray()) RefreshContextMenu(menu);
         CommandManager.InvalidateRequerySuggested();
     }
     private void Add(UIElement target, RegisteredCommand entry, ControlSequence sequence)
