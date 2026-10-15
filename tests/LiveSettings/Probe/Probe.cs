@@ -10,7 +10,7 @@ using QsysMods.Core;
 
 namespace Designer.Modules.SettingsLab;
 
-public sealed class Probe : ModModule
+public sealed partial class Probe : ModModule
 {
     private static readonly string Output = Path.Combine(AppContext.BaseDirectory, "live-evidence");
     private static readonly List<string> checks = [];
@@ -26,12 +26,16 @@ public sealed class Probe : ModModule
             Register("native", new(Key.S, ModifierKeys.Control));
             Register("prefix", null, "Ctrl+Alt+F10"); Register("chord", null, "Ctrl+Alt+F10 > P");
             Register("physical", null, "Ctrl+Alt+F11 > P");
+            Register("global", null, "Ctrl+Alt+F8 > G", true);
+            Register("global-single", new(Key.F7, ModifierKeys.Control | ModifierKeys.Alt), allowInText: true);
             Register("menu", new(Key.F, ModifierKeys.Alt));
             timer = new DispatcherTimer(DispatcherPriority.ContextIdle) { Interval = TimeSpan.FromMilliseconds(500) };
             timer.Tick += async (_, _) =>
             {
                 if (++attempts < 10 || !main.IsEnabled || !File.Exists(SharedSettings.PathName)) return;
                 timer.Stop(); Directory.CreateDirectory(Output);
+                var mode = Environment.GetEnvironmentVariable("QSYS_SETTINGS_LAB_MODE");
+                if (!string.IsNullOrEmpty(mode)) { await Acceptance(main, mode); return; }
                 if (File.Exists(Path.Combine(Output, "result.json")))
                 {
                     await Task.Delay(2500); Dump();
@@ -51,8 +55,8 @@ public sealed class Probe : ModModule
             timer.Start();
         });
     }
-    private static void Register(string id, KeyGesture? gesture, string? binding = null) => Commands.Register(new("settings-lab/" + id, "Lab " + id, "Settings validation", () =>
-    { runs[id] = runs.GetValueOrDefault(id) + 1; Dump(); }, () => true, gesture, InMenu: true) { DefaultBinding = binding });
+    private static void Register(string id, KeyGesture? gesture, string? binding = null, bool allowInText = false) => Commands.Register(new("settings-lab/" + id, "Lab " + id, "Settings validation", () =>
+    { runs[id] = runs.GetValueOrDefault(id) + 1; Dump(); }, () => true, gesture, InMenu: true, AllowInText: allowInText) { DefaultBinding = binding });
     private static JsonObject Read() => SettingsJson.Parse(File.ReadAllText(SharedSettings.PathName));
     private static JsonNode Good() => JsonNode.Parse(File.ReadAllText(Path.Combine(Host.SettingsDirectory, "settings.last-good.json")))!;
     private static void Edit(Action<JsonObject> change) { var doc = Read(); change(doc); File.WriteAllText(SharedSettings.PathName, SettingsJson.Text(doc)); }

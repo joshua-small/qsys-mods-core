@@ -103,6 +103,13 @@ Saved user assignments, including explicit clears, win. New managed defaults yie
 
 The window input router shows valid completions without moving focus. It cancels on Escape, an invalid completion, a mouse click, focus/window changes, settings reapplication or a ten-second timeout. Invalid completions are consumed, not replayed into an editor. Repeated held keys cannot execute twice. Provider readiness, host state, command availability and context are checked again before execution. Text entry is excluded unless the command opts in; browser-hosted input is not an exhaustive supported scope.
 
+Single-key mod shortcuts use those same guards; they cannot bypass `AllowInText`
+through the command binding used by menus. Native commands retain their own WPF
+route unless Core manages their default/context/sequence. The native floating
+Component Controls scope follows presentation-source changes after loading and
+permits only opted-in mod commands. Detached Actipro script tabs are not an
+attached Core scope; opting into text does not promise global OS/window routing.
+
 Native main-menu and discovered context-menu items display the same effective sequences. Context hints are refreshed when opening and restored on close. Top-level native Alt menu access keys participate in overwrite warnings, as do discovered editor input bindings. Class bindings, OS shortcuts and future editor scopes are not an exhaustive conflict inventory. There is no global keyboard hook.
 
 Binding format 2 accepts sequences. Format 1 single-key settings still load without an install-time rewrite. A future unknown format is rejected rather than guessed. Downgrading a profile containing chords requires restoring its prior preferences backup.
