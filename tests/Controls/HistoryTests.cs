@@ -15,6 +15,16 @@ internal static partial class Program
         var child = new Window(); var button = new Button(); var text = new TextBox();
         var body = new StackPanel(); body.Children.Add(button); body.Children.Add(text); child.Content = body;
         var engine = ModControls.Bindings;
+        var duplicateUndo = new KeyGesture(Key.Z, ModifierKeys.Control);
+        ApplicationCommands.Undo.InputGestures.Add(duplicateUndo);
+        var nativeUndoEntries = engine.DocumentHistoryEntries().Where(e => e.Command.Definition.Native == ApplicationCommands.Undo).ToArray();
+        Check(nativeUndoEntries.Count(e => e.Sequence == ControlSequence.Parse("Ctrl+Z")) == 1,
+            "Duplicate native Undo gestures resolve to one history shortcut");
+        var duplicateState = new ControlChordState();
+        Check(duplicateState.Feed(ControlSequence.Parse("Ctrl+Z").First,
+            nativeUndoEntries.Select(e => (e.Command.Definition.Id, e.Sequence)), out _) == Commands.NativeId(ApplicationCommands.Undo),
+            "Real host duplicate Undo gestures execute without an ambiguous-match exception");
+        ApplicationCommands.Undo.InputGestures.Remove(duplicateUndo);
         engine.AttachDocumentHistory(child); engine.AttachDocumentHistory(child);
         Check(child.CommandBindings.Count == 2, "Repeated history-window registration does not duplicate forwarding");
         Check(ApplicationCommands.Undo.CanExecute(null, button), "Operation-window button routes Undo availability to owner");
