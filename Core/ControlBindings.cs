@@ -18,6 +18,20 @@ public sealed partial class ControlBindings : IDisposable
     private BindingSettings current = new(new());
     private readonly ControlChordRouter chords;
     private ChordEntry[] resolvedEntries = [];
+    private readonly Dictionary<Window, ControlHistoryWindow> historyWindows = new();
+    /// <summary>Forward native Undo/Redo and their current keys from an operation window.
+    /// Text input and other commands retain the window's own routing.</summary>
+    public void AttachDocumentHistory(Window target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (target == window || historyWindows.ContainsKey(target)) return;
+        historyWindows.Add(target, new(window, target, DocumentHistoryEntries,
+            _ => historyWindows.Remove(target)));
+    }
+    internal IEnumerable<ChordEntry> DocumentHistoryEntries() => Commands.All.Where(ControlHistoryWindow.IsHistory).Where(Commands.IsAvailable)
+        // Designer can append the same gesture already supplied by WPF. One
+        // command/sequence must reach the chord resolver only once.
+        .SelectMany(c => Effective(c, current.Overrides).Distinct().Select(s => new ChordEntry(c, s)));
     public ControlBindings(Window window)
     {
         this.window = window;
@@ -288,6 +302,7 @@ public sealed partial class ControlBindings : IDisposable
     private void Restore()
     {
         chords.Cancel();
+        foreach (var history in historyWindows.Values) history.CancelPendingShortcut();
         resolvedEntries = [];
         foreach (var (item, original) in hints) item.InputGestureText = original; hints.Clear();
         foreach (var (owner, binding) in added) owner.InputBindings.Remove(binding); added.Clear();
@@ -348,6 +363,7 @@ public sealed partial class ControlBindings : IDisposable
     }
     public void Dispose()
     {
+        foreach (var history in historyWindows.Values.ToArray()) history.Dispose();
         popupHintsDisposed = true;
         foreach (var popup in popupHints.Keys.ToArray()) RestorePopupToolbar(popup);
         Restore(); chords.Dispose();
