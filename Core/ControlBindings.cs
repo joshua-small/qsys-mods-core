@@ -29,7 +29,9 @@ public sealed partial class ControlBindings : IDisposable
             _ => historyWindows.Remove(target)));
     }
     internal IEnumerable<ChordEntry> DocumentHistoryEntries() => Commands.All.Where(ControlHistoryWindow.IsHistory).Where(Commands.IsAvailable)
-        .SelectMany(c => Effective(c, current.Overrides).Select(s => new ChordEntry(c, s)));
+        // Designer can append the same gesture already supplied by WPF. One
+        // command/sequence must reach the chord resolver only once.
+        .SelectMany(c => Effective(c, current.Overrides).Distinct().Select(s => new ChordEntry(c, s)));
     public ControlBindings(Window window)
     {
         this.window = window;
