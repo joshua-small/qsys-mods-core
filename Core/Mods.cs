@@ -21,6 +21,10 @@ public abstract class ModModule : IDesignerModule
 
 public static class Mods
 {
+    public sealed record Diagnostic(string Id, string Status, string Assembly, string? Error);
+    private static readonly Dictionary<string, (string Assembly, string? Error)> diagnostics = new();
+    public static IReadOnlyList<Diagnostic> DiagnosticSnapshot() => status.OrderBy(p => p.Key)
+        .Select(p => new Diagnostic(p.Key, p.Value, diagnostics.GetValueOrDefault(p.Key).Assembly ?? "", diagnostics.GetValueOrDefault(p.Key).Error)).ToArray();
     private static readonly Dictionary<string, string> status = new();
     public static string? InitializingId { get; private set; }
     public static bool IsReady(string id) => status.GetValueOrDefault(id) == "Ready";
@@ -36,6 +40,7 @@ public static class Mods
         if (!Host.Enabled) return;
         if (!registered.Add(id)) throw new InvalidOperationException("Mod already registered: " + id);
         status[id] = "Waiting to initialize";
+        diagnostics[id] = (initialize.Method.DeclaringType?.Assembly.FullName ?? "", null);
         if (ready is not null) { Run(id, initialize, ready); ModControls.CompleteInitialization(); return; }
         pending.Add(id, initialize);
         if (timer is not null) return;
@@ -44,13 +49,19 @@ public static class Mods
     }
     private static void Tick(object? sender, EventArgs args)
     {
-        if (++attempts > 120) { timer!.Stop(); Host.Error("mods-core", new TimeoutException("Designer commands did not become ready.")); return; }
+        if (++attempts > 120)
+        {
+            timer!.Stop();
+            foreach (var id in pending.Keys) { status[id] = "Initialization timed out"; diagnostics[id] = (diagnostics[id].Assembly, "Designer commands did not become ready."); }
+            Host.Error("mods-core", new TimeoutException("Designer commands did not become ready.")); return;
+        }
         if (Application.Current.MainWindow is not { IsLoaded: true, IsEnabled: true } main) return;
         if (!main.CommandBindings.Cast<CommandBinding>().Any(b => ReferenceEquals(b.Command, Commands.Native("ColorSchemeToggle")))) return;
         timer!.Stop(); ready = main;
         try
         {
             Preferences.Install(); Commands.Initialize(main); ModControls.Initialize(main);
+            DiagnosticsPage.Register();
             Commands.Register(new("mods-core/preferences", "Mod Preferences…", "Q-SYS Mods Core", () => Preferences.Open(), () => true, InMenu: true));
             foreach (var pair in pending.ToArray()) Run(pair.Key, pair.Value, main);
             pending.Clear();
@@ -72,7 +83,7 @@ public static class Mods
                 throw new InvalidOperationException("Update " + id + " to 0.1.1 or newer with Mods Core. Older builds install competing control handlers.");
             initialize(window); status[id] = "Ready";
         }
-        catch (Exception ex) { status[id] = "Initialization failed"; Host.Error(id, ex, true); }
+        catch (Exception ex) { status[id] = "Initialization failed"; diagnostics[id] = (diagnostics[id].Assembly, ex.GetBaseException().Message); Host.Error(id, ex, true); }
         finally { InitializingId = null; }
     }
     private static IEnumerable<MenuItem> Menus(ItemsControl parent)
