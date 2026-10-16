@@ -14,7 +14,7 @@ Settings are stored in `%LOCALAPPDATA%\QsysMods\Designer-10.5\preferences.json`.
 
 ## Shared controls
 
-This source branch also provides a [live settings.json interface](docs/SETTINGS-JSON.md)
+Core provides a [live settings.json interface](docs/SETTINGS-JSON.md)
 for native General/Hard Links preferences, registered mod preferences and shared
 controls. **Tools > Q-SYS Mods > Open Settings JSON…** opens it in the associated
 editor. Core validates saves, retains last-good recovery, and projects native
@@ -22,7 +22,7 @@ Preferences changes back. It is integrated with the chord engine and has scoped
 disposable-Designer validation, including native write-failure recovery; see the
 contract for exact checks and remaining limits.
 
-Core 0.1.5 adds two-stroke chords, contextual defaults, prefix-conflict overwrite, and native/context-menu shortcut labels to the shared controls engine. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. Retired duplicate mod actions can alias their native action, migrating saved keys without creating a second row. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and validation](docs/MOD-CONTROLS.md). Use Core/Shortcuts 0.1.5 with Packing 0.1.3; pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
+Core 0.1.6 publishes two-stroke chords, contextual defaults, prefix-conflict overwrite, live settings and native/context-menu shortcut labels, including the later floating-window and editor-input fixes. Better Packing defaults to replacing all four Pack actions, with one opt-out on its own Preferences page. Better Shortcuts displays the same bindings and provider state. Retired duplicate mod actions can alias their native action, migrating saved keys without creating a second row. General first-run review remains available for future proposals; its page and menu stay hidden when unused. See [the shared-controls contract and validation](docs/MOD-CONTROLS.md). Use Core 0.1.6 with Packing/Shortcuts 0.2.0; their signed package policies require Core >=0.1.6 and <0.2.0. Pre-0.1.1 Packing/Shortcuts builds are rejected to prevent competing handlers.
 
 ## Mod API
 
@@ -57,6 +57,6 @@ The driver accepts both the original Better Shortcuts list and its four-column t
 
 For direct-editing recorder pages, the driver opens the shortcut editor, captures a candidate, checks that a conflict offers Overwrite, verifies Cancel preserves the target, and confirms transfer clears the other command before restoring its default. It uses Begin/Capture/Confirm programmatically; older recorder and text-field editors retain their existing paths. These checks do not establish physical double-click or key-delivery acceptance. The updated driver is compiled only. Separate scoped Designer checks of the 0.1.3 Pack-row fix, provider switching and Preferences persistence are recorded in [shared-controls validation](docs/MOD-CONTROLS.md#validation).
 
-The split and release sequencing are tracked in [Schematic Tools #4](https://github.com/joshua-small/qsys-schematic-tools/issues/4) and [Mod Manager #18](https://github.com/joshua-small/qsys-mod-manager/issues/18). No stable split release is implied by this source branch.
+The split history is tracked in [Schematic Tools #4](https://github.com/joshua-small/qsys-schematic-tools/issues/4) and [Mod Manager #18](https://github.com/joshua-small/qsys-mod-manager/issues/18). Coordinated release delivery is tracked in [Core #3](https://github.com/joshua-small/qsys-mods-core/issues/3). Historical local builds and published packages have distinct identities; release 0.1.6 preserves the earlier public 0.1.5 assets.
 
-Chords are tracked in [Core #4](https://github.com/joshua-small/qsys-mods-core/issues/4). The separate shared settings JSON work is tracked in [Core #5](https://github.com/joshua-small/qsys-mods-core/issues/5); its candidate must be reconciled with this binding engine before release. Mods register commands and conflicts through Core. They do not depend on, or register separately with, Better Shortcuts.
+Chord integration and scoped acceptance are tracked in [Core #4](https://github.com/joshua-small/qsys-mods-core/issues/4). The shared settings JSON integration in [Core #5](https://github.com/joshua-small/qsys-mods-core/issues/5) is complete. Mods register commands and conflicts through Core. They do not depend on, or register separately with, Better Shortcuts.
