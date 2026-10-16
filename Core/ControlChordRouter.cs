@@ -76,6 +76,7 @@ internal sealed class ControlChordRouter : IDisposable
     private readonly Window main;
     private readonly Func<IEnumerable<ChordEntry>> entries;
     private readonly Action<RegisteredCommand, Window> execute;
+    private readonly Func<RegisteredCommand, Window, bool> available;
     private readonly ControlChordState state = new();
     private readonly HashSet<Window> windows = new();
     private readonly HashSet<Key> held = new();
@@ -84,11 +85,13 @@ internal sealed class ControlChordRouter : IDisposable
     private Window? pendingWindow;
     private IInputElement? pendingFocus;
     private ChordEntry[] pendingEntries = [];
-    internal ControlChordRouter(Window main, Func<IEnumerable<ChordEntry>> entries, Action<RegisteredCommand, Window> execute)
+    internal ControlChordRouter(Window main, Func<IEnumerable<ChordEntry>> entries, Action<RegisteredCommand, Window> execute,
+        Func<RegisteredCommand, Window, bool>? available = null, bool attachMain = true)
     {
         this.main = main; this.entries = entries; this.execute = execute;
+        this.available = available ?? ((command, target) => ControlInput.Available(command, main, target));
         timeout = new DispatcherTimer(DispatcherPriority.Input, main.Dispatcher) { Interval = TimeSpan.FromSeconds(10) };
-        timeout.Tick += (_, _) => Cancel(); Attach(main);
+        timeout.Tick += (_, _) => Cancel(); if (attachMain) Attach(main);
     }
     internal void Attach(Window window)
     {
@@ -107,7 +110,7 @@ internal sealed class ControlChordRouter : IDisposable
         if (state.Waiting && (pendingWindow != target || pendingFocus != Keyboard.FocusedElement)) Cancel();
         if (stroke.IsModifier) return;
         if (e.IsRepeat || held.Contains(key)) { if (held.Contains(key) || state.Waiting) e.Handled = true; return; }
-        var available = state.Waiting ? pendingEntries : entries().Where(c => c.Sequence.First == stroke && ControlInput.Available(c.Command, main, target)).ToArray();
+        var available = state.Waiting ? pendingEntries : entries().Where(c => c.Sequence.First == stroke && this.available(c.Command, target)).ToArray();
         var id = state.Feed(stroke, available.Select(c => (c.Command.Definition.Id, c.Sequence)), out var consumed);
         if (!consumed) return;
         e.Handled = true; held.Add(key);
@@ -121,7 +124,7 @@ internal sealed class ControlChordRouter : IDisposable
         {
             var command = id is null ? null : available.FirstOrDefault(c => c.Command.Definition.Id == id)?.Command;
             Cancel();
-            if (command is not null && ControlInput.Available(command, main, target)) execute(command, target);
+            if (command is not null && this.available(command, target)) execute(command, target);
         }
     }
     private void KeyUp(object sender, KeyEventArgs e)

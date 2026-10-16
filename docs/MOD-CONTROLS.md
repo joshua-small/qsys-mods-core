@@ -95,6 +95,12 @@ Menus consume the same effective bindings after a save. Registered command menu 
 
 ## Chords and default bindings (0.1.5)
 
+### Document history in operation windows (0.1.8 candidate)
+
+Modeless mod windows that edit the main document can opt into `ModControls.Bindings.AttachDocumentHistory(window)`. Core forwards only native Undo/Redo to the main window, retaining native availability checks. Effective history shortcuts are read from the same binding store, including remaps, alternatives, chords and cleared assignments. A live binding change cancels pending chords. Text boxes, editable combos, password fields and recognized editors keep their own undo behavior; disabled windows or modal-disabled owners cannot forward document edits. Registration is idempotent and removed on close or Core disposal.
+
+This is an explicit operation-window capability, not automatic routing for preferences or other dialogs. Better Packing 0.3.0 is the initial consumer. The shared-controls harness passes 215 checks, including history forwarding, local text undo, live remaps/clears, pending-chord cancellation, blocked-owner handling and close cleanup. No visible window or Designer process was started; focused physical keys in Designer remain pending.
+
 `ControlSequence` contains one or two physical `ControlStroke` values. Serialize strokes with ` > ` and alternatives with `; `: `Ctrl+K > C; Ctrl+F8`. UI labels use **then** and **or**. Number-row and keypad keys remain distinct. A first stroke needs Ctrl, Alt, Windows or a function key. An ordinary-key command must explicitly set `AllowOrdinaryKey` and a non-null `ShortcutContext`; a chord completion may be an ordinary key. Bare Escape cancels and cannot be a completion. Escape release also cancels an armed chord if its key-down was intercepted before reaching the window.
 
 Set `ModCommand.DefaultBinding` during registration for a mod command. Use `Commands.RegisterDefaultBinding(native, binding, providerName, when, context)` during initialization for a canonical native action; do not create a duplicate command just to give it keys. Only a ready provider supplies defaults. The existing positional `ModCommand` constructor remains binary-compatible. Use reviewed proposals for competing providers of the same native default.
