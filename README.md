@@ -8,6 +8,8 @@ Core supports the inspected Designer **10.5.0.0** binaries only. Runtime checks 
 
 Open **File > Preferences** for Better Packing, Named Signal Colors, and Better Shortcuts. Pages use the existing left navigation and right content area. Operation windows appear under **Tools > Q-SYS Mods**. Passive filters have no empty operation windows.
 
+The unreleased **File > Preferences > Mod Diagnostics** page shows registered modules' initialization state, assembly identity and last initialization error, with Refresh and a read-only diagnostics directory. This gives passive features a shared status surface without a dedicated menu action. Ready means initialization completed; it does not prove every hook, rendering behavior or device works. Unsupported hosts that prevent Core startup cannot display this page; use local startup receipts for those cases. The page does not change settings.
+
 Install with Q-SYS Mod Manager **0.8 or newer** and the approved schema-3 catalog. When replacing Schematic Tools 0.16 or earlier, use **Split Schematic Tools** so the bundle and replacement hooks are never enabled together. The manager preserves unrelated exact pins and an undoable copy of the old bundle. Core owns registered default shortcuts and saved user overrides, including when Better Shortcuts is absent.
 
 Settings are stored in `%LOCALAPPDATA%\QsysMods\Designer-10.5\preferences.json`. A Preferences dialog stages every page, validates all values, then saves one document on OK. Closing or Cancel discards staged changes. Atomic replacement retains `.previous`; a file lock and a stale-document check prevent concurrent overwrites. Unknown sections survive temporarily uninstalled mods. Corrupt files are reported and preserved, not reset silently. Each mod can supply migration defaults; Named Signal Colors reads the old palette without changing its original file.
@@ -47,11 +49,14 @@ Use .NET SDK 10.0.112, the Windows targeting pack, and local vendor references:
 ```text
 dotnet build Module/Designer.Modules.ModsCore.csproj -c Release -p:DesignerDir="C:\Program Files\QSC\Q-SYS Designer 10.5"
 dotnet run --project tests/Settings/Settings.csproj
+dotnet run --project tests/Diagnostics/Diagnostics.csproj
 ```
 
 WSL builds use the corresponding `/mnt/c/...` Designer path and separate artifact outputs. No vendor binaries belong in this repository.
 
 Eight settings-store checks cover defaults, preservation, stale saves, backups, corrupt files, and identifiers. The guarded native driver in `tests/Native` exercises independently loaded feature modules, native Preferences Cancel/OK/reopen, defaults, shortcut conflicts/remapping/reset, sidebar collapse/restore, theme changes with an open Snapshot Inspector, six sidebar focus targets, Schematic Elements search focus, and the isolated /mods-dev diagnostics flag. It requires an exact disposable application path, `.selection-probe-lab`, a matching host, a new output directory, and a blank untitled document. Native test results establish only those application behaviors; they do not establish DSP/hardware acceptance or physical-key delivery.
+
+The new diagnostics harness has nine Windows WPF checks for status/failure capture, immutable snapshots, valid page registration, display, read-only path and refresh. It uses a minimal host fixture and does not open Designer or preferences files. Native page placement/startup acceptance remains pending for this change.
 
 The driver accepts both the original Better Shortcuts list and its four-column table. For the table it also checks column names, reference rows with assignment disabled, keybinding search, and an empty search result. These table assertions are prepared for [Better Shortcuts #2](https://github.com/joshua-small/qsys-better-shortcuts/issues/2); compiling the driver does not establish that they have run successfully in Designer.
 
