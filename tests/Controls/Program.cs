@@ -99,6 +99,7 @@ internal static partial class Program
         ChordTests(window);
         EditorTests();
         DefaultConflictTests(window);
+        HistoryTests(window);
         Console.WriteLine($"Passed {checks} shared controls checks. No Designer or visible window was started.");
     }
     static void DefaultConflictTests(Window window)
