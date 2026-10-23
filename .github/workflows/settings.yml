@@ -12,3 +12,4 @@ jobs:
           global-json-file: global.json
       - run: dotnet run --project tests/Settings/Settings.csproj
       - run: dotnet run --project tests/SettingsJson/SettingsJson.csproj
+      - run: dotnet run --project tests/HostCompatibility/HostCompatibility.csproj -- artifacts/host-compatibility

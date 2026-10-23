@@ -2,7 +2,7 @@
 
 Shared services for independent Q-SYS Designer mods: native Preferences pages, command and menu registration, exact-host checks, theme helpers, and local diagnostics. This is a Designer extension, not a DSP Core plugin or a public Q-SYS SDK.
 
-Core supports the inspected Designer **10.5.0.0** binaries only. Runtime checks require SHA-256 `0e7150f8dc02e0159e019188780fb003ce025f5ec18c491609cf337d849bda60` for `Q-Sys Designer.dll` and `a6d1addda06bdcb1ad32b57c7480c947210c3d3ad287f5818c2ea64068bf5aee` for `ModuleCommon.dll`. An isolated-lab marker does not bypass these checks.
+Core is tested with Designer **10.5.0.0** binaries: SHA-256 `0e7150f8dc02e0159e019188780fb003ce025f5ec18c491609cf337d849bda60` for `Q-Sys Designer.dll` and `a6d1addda06bdcb1ad32b57c7480c947210c3d3ad287f5818c2ea64068bf5aee` for `ModuleCommon.dll`. Other builds remain blocked by default. A Manager version with shared untested-version consent can record your acceptance of **WARNING: Untested on this version. Use at your own risk.** for this installation and its exact host files. Core then permits initialization on the next Designer startup. This opt-in does not establish compatibility; individual mods may have additional build checks. An isolated-lab marker does not bypass the checks. See [untested Designer opt-in](docs/HOST-COMPATIBILITY.md).
 
 ## Using the mods
 
@@ -51,6 +51,7 @@ Use .NET SDK 10.0.112, the Windows targeting pack, and local vendor references:
 dotnet build Module/Designer.Modules.ModsCore.csproj -c Release -p:DesignerDir="C:\Program Files\QSC\Q-SYS Designer 10.5"
 dotnet run --project tests/Settings/Settings.csproj
 dotnet run --project tests/Diagnostics/Diagnostics.csproj
+dotnet run --project tests/HostCompatibility/HostCompatibility.csproj -- artifacts/host-compatibility
 ```
 
 WSL builds use the corresponding `/mnt/c/...` Designer path and separate artifact outputs. No vendor binaries belong in this repository.
