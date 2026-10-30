@@ -129,6 +129,9 @@ public static class Preferences
             var tabs = Logical(window).OfType<TabControl>().Single();
             tabs.SelectedItem = tabs.Items.OfType<TabItem>().FirstOrDefault(t => Equals(t.Tag, "qsys-mod:" + id)) ?? tabs.SelectedItem;
         };
+        window.ShowInTaskbar = true;
+        window.WindowStyle = WindowStyle.SingleBorderWindow;
+        window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         window.ShowDialog();
     }
     public static void SelectPage(FrameworkElement source, string id)
