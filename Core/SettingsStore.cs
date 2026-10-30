@@ -23,7 +23,7 @@ public sealed class SettingsStore
     }
     public static void ValidateId(string id)
     {
-        if (!Regex.IsMatch(id, "^[a-z][a-z0-9-]{1,63}$")) throw new ArgumentException("Invalid mod identifier.");
+        if (!Regex.IsMatch(id, @"\A[a-z][a-z0-9-]{1,63}\z")) throw new ArgumentException("Invalid mod identifier.");
     }
     public T Read<T>(string id, Func<T> defaults)
     {
